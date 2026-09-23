@@ -1,0 +1,65 @@
+2026-09-23 23:55:11,789  INFO  Drishti Port Statistics Extraction Pipeline — 2026-09-23T23:55:11.789510
+2026-09-23 23:55:11,790  INFO  ============================================================
+2026-09-23 23:55:11,790  INFO  PDF: Basic Port Statistics of India 2023-24.pdf  [2023-24]
+2026-09-23 23:55:11,927  INFO  Pages: 240
+2026-09-23 23:55:12,065  INFO  [T1-2023-24] 25 rows
+2026-09-23 23:55:58,978  INFO  [T2-2023-24] 1 rows
+2026-09-23 23:55:58,986  INFO  [T3-2023-24] 0 rows
+2026-09-23 23:55:58,990  INFO  [T4-2023-24] 16 rows
+2026-09-23 23:55:58,994  INFO  [T5-2023-24] 2 rows
+2026-09-23 23:55:59,000  INFO  [T6-2023-24] 11 rows
+2026-09-23 23:55:59,005  INFO  [T7-2023-24] 0 rows
+2026-09-23 23:58:34,879 INFO  Drishti Port Statistics Extraction Pipeline — 2026-09-23T23:58:34.879256
+2026-09-23 23:58:34,880 INFO  ============================================================
+2026-09-23 23:58:34,880 INFO  PDF: Basic Port Statistics of India 2023-24.pdf  [2023-24]
+2026-09-23 23:58:35,004 INFO  Pages: 240
+2026-09-23 23:58:35,213 INFO  [T1-2023-24] 73 rows
+2026-09-23 23:58:36,555 INFO  [T2-2023-24] 18 rows
+2026-09-23 23:58:36,556 INFO  [T3-2023-24] 48 rows
+2026-09-23 23:58:36,557 INFO  [T4-2023-24] 6 rows
+2026-09-23 23:58:36,776 INFO  [T5-2023-24] 11 rows
+2026-09-23 23:58:49,685 INFO  [T6-2023-24] 49 rows
+2026-09-23 23:58:50,275 INFO  [T7-2023-24] 103 rows
+2026-09-23 23:58:50,287 INFO  Total rows from 2023-24: 308
+2026-09-23 23:58:50,296 INFO  ============================================================
+2026-09-23 23:58:50,296 INFO  PDF: Basic Port Statistics of India 2024-25.pdf  [2024-25]
+2026-09-23 23:58:50,427 INFO  Pages: 243
+2026-09-23 23:58:50,571 INFO  [T1-2024-25] 61 rows
+2026-09-23 23:58:52,104 INFO  [T2-2024-25] 24 rows
+2026-09-23 23:58:52,104 INFO  [T3-2024-25] 0 rows
+2026-09-23 23:58:52,105 INFO  [T4-2024-25] 4 rows
+2026-09-23 23:58:52,371 INFO  [T5-2024-25] 19 rows
+2026-09-23 23:59:05,501 INFO  [T6-2024-25] 48 rows
+2026-09-23 23:59:06,029 INFO  [T7-2024-25] 128 rows
+2026-09-23 23:59:06,044 INFO  Total rows from 2024-25: 284
+2026-09-23 23:59:06,089 INFO  Final rows: 592  (dropped 0 duplicates)
+2026-09-23 23:59:06,109 INFO  Saved: C:\Users\yashw\OneDrive\Documents\Capstone_implementation\data\supply_chain\processed\port_statistics.csv
+2026-09-23 23:59:06,119 INFO  Validation report: C:\Users\yashw\OneDrive\Documents\Capstone_implementation\data\supply_chain\processed\validation_report.json
+2026-09-23 23:59:06,133 INFO  Done.
+2026-09-24 00:02:37,433 INFO  Drishti Port Statistics Extraction Pipeline — 2026-09-24T00:02:37.433824
+2026-09-24 00:02:37,434 INFO  ============================================================
+2026-09-24 00:02:37,434 INFO  PDF: Basic Port Statistics of India 2023-24.pdf  [2023-24]
+2026-09-24 00:02:37,564 INFO  Pages: 240
+2026-09-24 00:02:37,696 INFO  [T1-2023-24] 73 rows
+2026-09-24 00:02:38,532 INFO  [T2-2023-24] 11 rows
+2026-09-24 00:02:38,533 INFO  [T3-2023-24] 32 rows
+2026-09-24 00:02:38,827 INFO  [T4-2023-24] 24 rows
+2026-09-24 00:02:39,202 INFO  [T5-2023-24] 10 rows
+2026-09-24 00:02:49,616 INFO  [T6-2023-24] 50 rows
+2026-09-24 00:02:50,155 INFO  [T7-2023-24] 196 rows
+2026-09-24 00:02:50,167 INFO  Total rows from 2023-24: 396
+2026-09-24 00:02:50,173 INFO  ============================================================
+2026-09-24 00:02:50,173 INFO  PDF: Basic Port Statistics of India 2024-25.pdf  [2024-25]
+2026-09-24 00:02:50,419 INFO  Pages: 243
+2026-09-24 00:02:50,608 INFO  [T1-2024-25] 61 rows
+2026-09-24 00:02:51,738 INFO  [T2-2024-25] 24 rows
+2026-09-24 00:02:51,738 INFO  [T3-2024-25] 80 rows
+2026-09-24 00:02:51,964 INFO  [T4-2024-25] 24 rows
+2026-09-24 00:02:52,208 INFO  [T5-2024-25] 11 rows
+2026-09-24 00:03:02,157 INFO  [T6-2024-25] 50 rows
+2026-09-24 00:03:02,475 INFO  [T7-2024-25] 210 rows
+2026-09-24 00:03:02,483 INFO  Total rows from 2024-25: 460
+2026-09-24 00:03:02,502 INFO  Final rows: 852  (dropped 4 duplicates)
+2026-09-24 00:03:02,518 INFO  Saved: C:\Users\yashw\OneDrive\Documents\Capstone_implementation\data\supply_chain\processed\port_statistics.csv
+2026-09-24 00:03:02,526 INFO  Validation report: C:\Users\yashw\OneDrive\Documents\Capstone_implementation\data\supply_chain\processed\validation_report.json
+2026-09-24 00:03:02,572 INFO  Done.
