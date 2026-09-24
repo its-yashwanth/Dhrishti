@@ -35,6 +35,14 @@ from agents.stakeholder_advisory_agent import StakeholderAdvisoryAgent
 from agents.mitigation_action_agent import MitigationActionAgent
 from drishti_mcp.tools.ml_cascade_tool import run_drishti_ml_cascade
 
+# New decision-support agents (non-ML, backward compatible)
+try:
+    from agents.supply_chain_agent import SupplyChainAgent
+    from agents.vulnerability_agent import VulnerabilityAgent
+    _NEW_AGENTS_AVAILABLE = True
+except ImportError:
+    _NEW_AGENTS_AVAILABLE = False
+
 
 def _wrap_text(text: str, width: int = 84, indent: str = "  ") -> str:
     """Helper to wrap long paragraphs cleanly for terminal display with Windows console safe encoding."""
@@ -74,6 +82,13 @@ class DrishtiAgentOrchestrator:
         self.impact_agent = ImpactInterpretationAgent(self.llm)
         self.stakeholder_agent = StakeholderAdvisoryAgent(self.llm)
         self.mitigation_agent = MitigationActionAgent(self.llm)
+        # New decision-support agents
+        if _NEW_AGENTS_AVAILABLE:
+            self.supply_chain_agent = SupplyChainAgent()
+            self.vulnerability_agent = VulnerabilityAgent()
+        else:
+            self.supply_chain_agent = None
+            self.vulnerability_agent = None
 
     def run_scenario_dict(self, scenario_name: str, scenario_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -164,6 +179,36 @@ class DrishtiAgentOrchestrator:
         )
         mitigation_provider = mitigation_output.get("llm_provider") or getattr(self.mitigation_agent.llm, "last_provider_used", None) or "Groq — openai/gpt-oss-120b"
 
+        # Step 4: Decision-support layer (Supply-Chain + Vulnerability)
+        supply_chain_output = {}
+        vulnerability_output = {}
+        if self.supply_chain_agent is not None:
+            try:
+                supply_chain_output = self.supply_chain_agent.analyse(
+                    commodity=commodity,
+                    hs4=hs4,
+                    trade_type=trade_type,
+                    event_country=event_country,
+                    shock_direction=structured_event.get("shock_direction", "supply_contraction"),
+                    shock_intensity=float(shock_intensity or 1.0),
+                    trade_share=float(trade_share or 5.0),
+                    ml_predictions=ml_predictions,
+                )
+            except Exception as _sc_err:
+                supply_chain_output = {"error": str(_sc_err)}
+
+        if self.vulnerability_agent is not None:
+            try:
+                vulnerability_output = self.vulnerability_agent.analyse(
+                    commodity=commodity,
+                    hs4=hs4,
+                    trade_type=trade_type,
+                    shock_direction=structured_event.get("shock_direction", "supply_contraction"),
+                    ml_predictions=ml_predictions,
+                )
+            except Exception as _vu_err:
+                vulnerability_output = {"error": str(_vu_err)}
+
         final_result = {
             "scenario_name": scenario_name,
             "scenario_data": scenario_data,
@@ -174,6 +219,8 @@ class DrishtiAgentOrchestrator:
             "stakeholder_impacts": stakeholder_output["stakeholder_impacts"],
             "historical_context": mitigation_output["historical_context"],
             "mitigation_actions": mitigation_output["mitigation_actions"],
+            "supply_chain_analysis": supply_chain_output,
+            "vulnerability_analysis": vulnerability_output,
             "llm_usage": {
                 "economic_interpretation": interp_provider,
                 "mitigation": mitigation_provider,
@@ -241,6 +288,36 @@ class DrishtiAgentOrchestrator:
             stakeholder_impacts=stakeholder_impacts,
         )
 
+        # Decision-support layer
+        supply_chain_output = {}
+        vulnerability_output = {}
+        if self.supply_chain_agent is not None:
+            try:
+                supply_chain_output = self.supply_chain_agent.analyse(
+                    commodity=structured_event.get("commodity", commodity or "Wheat"),
+                    hs4=int(structured_event.get("hs4", hs4 or 1001)),
+                    trade_type=structured_event.get("trade_type", trade_type or "Import"),
+                    event_country=structured_event.get("country", partner_country or "RUSSIA"),
+                    shock_direction=structured_event.get("shock_direction", "supply_contraction"),
+                    shock_intensity=shock_intensity,
+                    trade_share=trade_share,
+                    ml_predictions=ml_predictions,
+                )
+            except Exception as _sc_err:
+                supply_chain_output = {"error": str(_sc_err)}
+
+        if self.vulnerability_agent is not None:
+            try:
+                vulnerability_output = self.vulnerability_agent.analyse(
+                    commodity=structured_event.get("commodity", commodity or "Wheat"),
+                    hs4=int(structured_event.get("hs4", hs4 or 1001)),
+                    trade_type=structured_event.get("trade_type", trade_type or "Import"),
+                    shock_direction=structured_event.get("shock_direction", "supply_contraction"),
+                    ml_predictions=ml_predictions,
+                )
+            except Exception as _vu_err:
+                vulnerability_output = {"error": str(_vu_err)}
+
         return {
             "query": query,
             "user_parameters": user_params,
@@ -254,6 +331,8 @@ class DrishtiAgentOrchestrator:
             "stakeholder_impacts": stakeholder_impacts,
             "historical_context": mitigation_output["historical_context"],
             "mitigation_actions": mitigation_output["mitigation_actions"],
+            "supply_chain_analysis": supply_chain_output,
+            "vulnerability_analysis": vulnerability_output,
             "provenance": {
                 "event_sources": "[GDELT DATA]",
                 "user_parameters": "[USER / CLI PARAMETER]",
