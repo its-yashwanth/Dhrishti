@@ -1,0 +1,113 @@
+{
+  "generated_at": "2026-09-24T00:03:02.518771",
+  "total_rows": 852,
+  "columns": [
+    "year",
+    "source_year_pdf",
+    "port",
+    "category",
+    "traffic_type",
+    "source_table",
+    "source_page",
+    "metric",
+    "value",
+    "unit",
+    "overseas_mt",
+    "coastal_mt",
+    "total_mt",
+    "commodity",
+    "container_tonnes_mt",
+    "container_teus_000",
+    "capacity_mt",
+    "traffic_mt",
+    "utilisation_pct",
+    "major_port_mt",
+    "non_major_port_mt"
+  ],
+  "rows_by_source_year": {
+    "2023-24": 394,
+    "2024-25": 458
+  },
+  "rows_by_year": {
+    "2014-15": 8,
+    "2015-16": 16,
+    "2016-17": 16,
+    "2017-18": 8,
+    "2018-19": 20,
+    "2019-20": 55,
+    "2020-21": 82,
+    "2021-22": 80,
+    "2022-23": 97,
+    "2023-24": 263,
+    "2024-25": 207
+  },
+  "rows_by_traffic_type": {
+    "capacity": 21,
+    "commodity": 186,
+    "container": 48,
+    "efficiency": 403,
+    "macro": 134,
+    "overseas_coastal": 35,
+    "state_total": 25
+  },
+  "rows_by_source_table": {
+    "Commodity-wise Cargo at Major Ports (Table 8)": 112,
+    "Container Traffic at Major Ports (Table 9)": 48,
+    "Non-Major Ports: State+Commodity Traffic": 74,
+    "Port Sector at a Glance": 134,
+    "Port-wise Capacity Utilisation": 21,
+    "Port-wise Cargo at Major Ports (Table 7)": 35,
+    "State-wise Cargo Traffic at Indian Ports": 25,
+    "Table: Pre-Berthing Detention (hours)": 198,
+    "Table: Turn Round Time (hours)": 205
+  },
+  "missing_values": {
+    "year": 0,
+    "source_year_pdf": 0,
+    "port": 0,
+    "category": 0,
+    "traffic_type": 0,
+    "source_table": 0,
+    "source_page": 0,
+    "metric": 315,
+    "value": 315,
+    "unit": 0,
+    "overseas_mt": 817,
+    "coastal_mt": 817,
+    "total_mt": 609,
+    "commodity": 666,
+    "container_tonnes_mt": 804,
+    "container_teus_000": 804,
+    "capacity_mt": 831,
+    "traffic_mt": 831,
+    "utilisation_pct": 831,
+    "major_port_mt": 827,
+    "non_major_port_mt": 827
+  },
+  "tables_extracted": [
+    "T1: Port Sector at a Glance (Macro: cargo, containers) \u2014 years 2018-25",
+    "T2: Port-wise Cargo at Major Ports (Overseas + Coastal) \u2014 12 ports \u00d7 2 years",
+    "T3: Commodity-wise Cargo at Major Ports \u2014 10 years \u00d7 8 commodities",
+    "T4: Port-wise Container Traffic (Tonnes + TEUs) \u2014 12 ports \u00d7 2 years",
+    "T5: Port-wise Capacity Utilisation (%) \u2014 12 ports",
+    "T6: State-wise Cargo (Major + Non-Major) \u2014 10 states",
+    "T7: Efficiency Indicators (Pre-Berthing Detention + Turn Round Time) \u2014 12 ports \u00d7 5 years"
+  ],
+  "tables_skipped": [
+    "Table 1.2 List of Non-Major Ports (name list, no statistics)",
+    "Table 1.3 Topography (engineering/lat-lon data only)",
+    "Table 1.4 Berths Available (berth-level engineering specifications)",
+    "Table 1.5 Storage Facilities (silo/shed specs)",
+    "Tables 2.1.6/2.1.7 Overseas Cargo by Country (available from UNComtrade)",
+    "Historical time-series tables 3.x (superseded by current T2-T7 data)",
+    "Financial tables (Revenue, Expenditure, Capital Employed)",
+    "Employment & Manpower tables"
+  ],
+  "known_limitations": [
+    "pdfplumber text extraction may misparse complex multi-column PDF tables",
+    "T3 commodity extraction uses year-regex anchoring; growth rows are skipped",
+    "Container values for Kolkata DS and Haldia DC are extracted as sub-port rows",
+    "Non-Major Port commodity data is state-level summary only",
+    "Capacity utilisation numbers for 2023-24 may include some mis-parsed serial numbers; verify against source if exact figures are needed"
+  ]
+}
