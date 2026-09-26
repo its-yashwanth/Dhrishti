@@ -17,6 +17,10 @@ models/model_a_trade.joblib
 models/model_a_rf.joblib
 models/model_c_price.joblib
 
+# Supply Chain & Vulnerability datasets
+data/supply_chain/
+data/vulnerability/
+
 # =====================================================
 # PYTHON
 # =====================================================

@@ -1,41 +1,50 @@
 """
-Drishti Agent: Supply-Chain Agent
-==================================
-Contextual/rule-based agent that maps a geopolitical trade shock to
-Indian port logistics context using the Ministry of Ports, Shipping
-and Waterways dataset.
+Drishti Supply-Chain Agent (Graph-Based)
+==========================================
+Upgraded Supply-Chain Agent using a heterogeneous, weighted, directed
+MultiDiGraph (NetworkX) to model relationships among geopolitical actors,
+commodities, Indian Major Ports, states, and agricultural districts.
 
-Purpose
--------
-Given:  event_country, commodity, hs4, trade_type, shock direction,
-        shock intensity, trade share
-Return: structured supply-chain context including:
-  - Relevant Indian Major Ports
-  - Port cargo dependency (overseas + coastal)
-  - Commodity cargo context at Major Ports
-  - Container traffic dependency
-  - State-level logistics concentration
-  - Potential bottleneck / dependency indicators
-  - Provenance for every dataset-derived value
+Research Contribution
+---------------------
+A heterogeneous, weighted, directed supply-chain graph models relationships
+among geopolitical actors, commodities, Indian ports, states, districts and
+agricultural production, enabling dependency, connectivity, bottleneck and
+scenario shock-propagation analysis.
 
-Important caveats
------------------
-- Does NOT claim causal responsibility.
-- Uses hedging language: "indicates exposure", "suggests dependency",
-  "potential bottleneck", "logistics concentration", "observed traffic".
-- Does NOT invent statistics.
-- Returns "Insufficient data" when the dataset has no matching record.
-- Provenance tags follow Drishti convention:
-    [PORT DATA]        — dataset-derived values
-    [RULE-BASED OUTPUT]— deterministic computation
-    [USER / CLI PARAMETER] — user inputs
-
-Trade direction convention
+Responsibility Boundaries
 --------------------------
-  Export: India ships commodity → foreign country
-          ∴ relevant ports are those that handle India's outbound cargo
-  Import: foreign country ships commodity → India
-          ∴ relevant ports are those that receive India's inbound cargo
+This agent is responsible for:
+  - Supply-chain network construction
+  - Trade/port/logistics dependency analysis
+  - Graph construction and analytics
+  - Scenario exposure propagation
+  - Bottleneck and alternative path identification
+
+This agent does NOT:
+  - Replicate ML Models A-D functionality
+  - Replace the Event Intelligence Agent
+  - Provide agricultural vulnerability scores (that is VulnerabilityAgent)
+  - Make causal predictions about disruption
+
+Integration
+-----------
+Receives from Orchestrator:
+  commodity, hs4, trade_type, event_country, shock_intensity,
+  trade_share, ml_predictions (optional)
+
+Returns structured supply_chain_analysis dict consumed by:
+  - Orchestrator (for final result assembly)
+  - Dashboard visualization
+  - Mitigation Agent (context enrichment)
+
+Provenance tags:
+  [USER / CLI PARAMETER] — inputs from user
+  [PORT DATA]            — port_statistics.csv (MoPSW)
+  [AGRICULTURE DATA]     — crop-wise-area-production-yield.csv
+  [GRAPH-DERIVED]        — computed from graph structure
+  [RULE-BASED OUTPUT]    — rule-based inferences
+  [ML MODEL OUTPUT]      — from existing ML cascade
 """
 
 import sys
@@ -43,99 +52,38 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-import pandas as pd
-import numpy as np
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from scripts.validate_supply_chain_data import (
-    load_port_data,
-    validate_port_data,
-    get_trusted_port_cargo,
-    get_trusted_commodity_cargo,
-    get_trusted_container_traffic,
-    get_trusted_state_cargo,
-)
+from graph.builders import SupplyChainGraphBuilder, PORT_COMMODITY_AFFINITY, PORT_STATE_MAP
+from graph.analytics import compute_all_analytics
+from graph.propagation import propagate_shock
+from agents.crop_commodity_mapping import resolve_crop
 
 log = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Port ↔ Commodity keyword mapping
-# Used to identify which ports typically handle specific commodities.
-# Based on publicly known port specialisations, not fabricated.
-# ---------------------------------------------------------------------------
-PORT_COMMODITY_AFFINITY: Dict[str, List[str]] = {
-    "Paradip Port Authority":                  ["coal", "fertilizer", "iron ore", "food grain", "rice", "wheat"],
-    "Vishakhapatnam Port Authority":           ["coal", "iron ore", "fertilizer", "general cargo"],
-    "Kamarajar Port Limited":                  ["coal", "iron ore"],
-    "Chennai Port Authority":                  ["container", "rice", "wheat", "general cargo", "automobile"],
-    "V.O. Chidambaranar Port Authority":       ["container", "rice", "wheat", "general cargo", "tuticorin"],
-    "Cochin Port Authority":                   ["container", "spices", "pepper", "general cargo"],
-    "New Mangalore Port Authority":            ["coal", "fertilizer", "general cargo"],
-    "Mormugao Port Authority":                 ["iron ore", "coal", "fertilizer"],
-    "JNPA":                                    ["container", "general cargo", "rice", "wheat"],
-    "Mumbai Port Authority":                   ["container", "general cargo", "spices", "sugar"],
-    "Deendayal Port Authority":                ["container", "general cargo", "rice", "wheat", "fertilizer"],
-    "SMPA Kolkata DS":                         ["general cargo", "rice", "wheat", "jute"],
-    "SMPA Haldia DC":                          ["coal", "fertilizer", "general cargo", "rice", "wheat"],
-}
+# Singleton graph builder (data loaded once)
+_BUILDER: Optional[SupplyChainGraphBuilder] = None
 
-# Commodity → port commodity category alignment
-COMMODITY_TO_PORT_CATEGORY: Dict[str, str] = {
-    "rice":      "food grain",
-    "wheat":     "food grain",
-    "maize":     "food grain",
-    "soybean":   "fertilizer",     # also general cargo
-    "soyabean":  "fertilizer",
-    "groundnut": "general cargo",
-    "cotton":    "general cargo",
-    "sugar":     "general cargo",
-    "sugarcane": "general cargo",
-    "coal":      "coal",
-    "iron ore":  "iron ore",
-    "fertilizer": "fertilizer",
-    "pepper":    "general cargo",
-    "spices":    "general cargo",
-    "turmeric":  "general cargo",
-    "ginger":    "general cargo",
-    "onion":     "general cargo",
-    "potato":    "general cargo",
-    "palm oil":  "general cargo",
-    "pulses":    "food grain",
-}
+
+def _get_builder() -> SupplyChainGraphBuilder:
+    global _BUILDER
+    if _BUILDER is None:
+        _BUILDER = SupplyChainGraphBuilder()
+    return _BUILDER
 
 
 class SupplyChainAgent:
     """
-    Rule-based / contextual supply-chain analysis agent.
-    Loaded once per process; data is cached in memory.
+    Graph-based Supply-Chain Agent for Drishti.
+
+    Builds a heterogeneous, weighted, directed MultiDiGraph per scenario
+    and computes dependency, bottleneck, and propagation analytics.
     """
 
-    _data_cache: Optional[pd.DataFrame] = None
-
     def __init__(self):
-        self._load_data()
-
-    def _load_data(self):
-        """Load and cache port data (with trusted filtering)."""
-        if SupplyChainAgent._data_cache is None:
-            try:
-                raw = load_port_data()
-                SupplyChainAgent._data_cache = raw
-                log.info("SupplyChainAgent: port data loaded (%d rows)", len(raw))
-            except FileNotFoundError as e:
-                log.error("SupplyChainAgent: %s", e)
-                SupplyChainAgent._data_cache = pd.DataFrame()
-
-    @property
-    def _raw(self) -> pd.DataFrame:
-        return SupplyChainAgent._data_cache if SupplyChainAgent._data_cache is not None else pd.DataFrame()
-
-    # ------------------------------------------------------------------
-    # Main entry point
-    # ------------------------------------------------------------------
+        self._builder = _get_builder()
 
     def analyse(
         self,
@@ -149,554 +97,578 @@ class SupplyChainAgent:
         ml_predictions: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Run supply-chain analysis for a given commodity + trade shock.
+        Run supply-chain analysis for a given trade shock scenario.
 
         Parameters
         ----------
-        commodity       : Commodity name (e.g. 'Wheat', 'Rice', 'Palm Oil')
-        hs4             : 4-digit HS code
+        commodity       : Commodity name (e.g., 'Wheat', 'Rice')
+        hs4             : HS4 tariff code
         trade_type      : 'Import' or 'Export'
-        event_country   : Foreign partner country
-        shock_direction : Canonical shock type from EventIntelligenceAgent
-        shock_intensity : Intensity index
-        trade_share     : Partner trade share %
-        ml_predictions  : Optional ML cascade predictions (for context only)
+        event_country   : Partner country name (UPPERCASE)
+        shock_direction : Direction of shock (for context only)
+        shock_intensity : Shock multiplier (e.g. 1.5 = 50% stronger than baseline)
+        trade_share     : Partner's share of India's commodity trade (%)
+        ml_predictions  : Optional ML cascade predictions (for context)
 
         Returns
         -------
-        dict following the Drishti supply_chain_analysis schema
+        dict with supply_chain_analysis key
         """
-        if self._raw.empty:
-            return self._insufficient_data(commodity, hs4, trade_type, event_country,
-                                           reason="Port statistics dataset not available.")
+        effective_shock = round(shock_intensity * (trade_share / 100.0), 6)
+        comm_lower = commodity.strip().lower()
 
-        # Compute effective shock
-        effective_shock = shock_intensity * (trade_share / 100.0)
+        # Step 1: Build the scenario graph
+        try:
+            G = self._builder.build_scenario_graph(
+                commodity=commodity,
+                hs4=hs4,
+                trade_type=trade_type,
+                event_country=event_country,
+                shock_intensity=shock_intensity,
+                trade_share=trade_share,
+                ml_predictions=ml_predictions,
+            )
+        except Exception as e:
+            log.error("SupplyChainAgent: graph build failed: %s", e)
+            return self._error_output(commodity, hs4, trade_type, event_country,
+                                       effective_shock, str(e))
 
-        # Determine trade direction label
-        if trade_type.strip().capitalize() == "Export":
-            trade_direction_label = f"India's exports to {event_country}"
-            exposure_type = "export_exposure"
-        else:
-            trade_direction_label = f"India's imports from {event_country}"
-            exposure_type = "import_exposure"
+        # Step 2: Compute analytics
+        try:
+            analytics = compute_all_analytics(
+                G, commodity=commodity,
+                trade_type=trade_type, event_country=event_country,
+            )
+        except Exception as e:
+            log.warning("SupplyChainAgent: analytics failed: %s", e)
+            analytics = {"error": str(e)}
 
-        # Get trusted sub-tables
-        t2 = get_trusted_port_cargo(self._raw)
-        t3 = get_trusted_commodity_cargo(self._raw)
-        t4 = get_trusted_container_traffic(self._raw)
-        t6 = get_trusted_state_cargo(self._raw)
+        # Step 3: Shock propagation
+        try:
+            propagation = propagate_shock(
+                G,
+                commodity=commodity,
+                trade_type=trade_type,
+                event_country=event_country,
+                shock_intensity=shock_intensity,
+                trade_share=trade_share,
+            )
+        except Exception as e:
+            log.warning("SupplyChainAgent: propagation failed: %s", e)
+            propagation = {"error": str(e)}
 
-        # --- Port cargo analysis (T2) ---
-        port_cargo_rows  = self._get_latest_port_cargo(t2)
-        relevant_ports   = self._identify_relevant_ports(commodity, hs4)
-        port_dependency  = self._compute_port_dependency(port_cargo_rows, relevant_ports)
+        # Step 4: Graph serialization (for dashboard/RAG)
+        graph_dict = self._builder.graph_to_dict(G)
 
-        # --- Commodity cargo context (T3) ---
-        commodity_context = self._get_commodity_context(t3, commodity, hs4)
+        # Step 5: Build structured output
+        trade_dep = analytics.get("trade_dependency", {})
+        port_dep = analytics.get("port_dependency", {})
+        if "port_concentration_hhi" in port_dep and "port_cargo_hhi" not in port_dep:
+            port_dep["port_cargo_hhi"] = port_dep["port_concentration_hhi"]
+        bottleneck = analytics.get("bottleneck_analysis", {})
+        alt_paths = analytics.get("alternative_paths", {})
+        regional = analytics.get("regional_dependency", {})
+        critical = analytics.get("critical_nodes", {})
+        betweenness = analytics.get("betweenness_centrality", {})
 
-        # --- Container dependency (T4) ---
-        container_dep = self._get_container_dependency(t4, commodity, hs4)
+        # ML context extraction
+        ml_context = self._extract_ml_context(ml_predictions, effective_shock, trade_share)
 
-        # --- State logistics context (T6) ---
-        state_context = self._get_state_logistics(t6)
-
-        # --- Bottleneck indicators ---
-        bottlenecks = self._identify_bottlenecks(
-            port_cargo_rows, relevant_ports, trade_type, effective_shock
-        )
-
-        # --- Risk indicators ---
+        # Risk indicators (combined graph + rule-based + ML)
         risk_indicators = self._compute_risk_indicators(
-            trade_share, effective_shock, trade_type,
-            port_dependency, commodity_context, ml_predictions
+            trade_share, effective_shock, trade_dep, port_dep,
+            bottleneck, alt_paths, ml_predictions
         )
 
-        # --- Limitations ---
-        limitations = self._standard_limitations(commodity, hs4)
+        # Summary scenario exposure
+        prop_summary = propagation.get("propagation_summary", {}) if isinstance(propagation, dict) else {}
 
-        # --- Provenance ---
-        provenance = self._build_provenance(t2, t3, t4, t6)
+        # Direction string
+        if trade_type.capitalize() == "Import":
+            trade_direction = f"India's imports from {event_country}"
+            exposure_type = "import_exposure"
+        else:
+            trade_direction = f"India's exports to {event_country}"
+            exposure_type = "export_exposure"
 
-        return {
+        alt_ports_list = alt_paths.get("alternative_ports", [])
+        network_resilience = {
+            "modeled_alternative_ports": alt_ports_list,
+            "n_alternative_ports": len(alt_ports_list),
+            "path_availability": alt_paths.get("path_availability", "UNKNOWN"),
+            "container_dependency": port_dep.get("container_dependency", "N/A"),
+            "alternative_handling_info": alt_paths.get("description", ""),
+            "note": "Modeled alternative handling ports derived from graph topology using inferred port affinities. Commodity routing is inferred, not observed.",
+            "provenance": "[GRAPH-DERIVED]",
+        }
+
+        result = {
             "supply_chain_analysis": {
+                # Backward-compatibility flat aliases
                 "commodity": commodity,
                 "hs4": hs4,
                 "trade_type": trade_type,
+                "trade_direction": trade_direction,
                 "affected_country": event_country,
-                "trade_direction": trade_direction_label,
+                "effective_shock": effective_shock,
                 "exposure_type": exposure_type,
-                "effective_shock": round(effective_shock, 4),
-                "relevant_ports": relevant_ports,
-                "port_cargo_context": port_dependency,
-                "commodity_port_context": commodity_context,
-                "container_dependency": container_dep,
-                "state_logistics_context": state_context,
-                "potential_bottlenecks": bottlenecks,
+                "relevant_ports": port_dep.get("relevant_ports", []),
+                "port_cargo_context": port_dep.get("relevant_ports", []),
+                "commodity_port_context": port_dep.get("commodity_cargo_context", []),
+                "container_dependency": port_dep.get("container_dependency", "N/A"),
+                "potential_bottlenecks": bottleneck.get("bottleneck_ports", []),
+
+                "scenario": {
+                    "commodity": commodity,
+                    "hs4": hs4,
+                    "trade_type": trade_type,
+                    "affected_country": event_country,
+                    "shock_direction": shock_direction,
+                    "shock_intensity": shock_intensity,
+                    "trade_share_pct": trade_share,
+                    "effective_shock": effective_shock,
+                    "trade_direction": trade_direction,
+                    "exposure_type": exposure_type,
+                },
+                "graph_summary": {
+                    "n_nodes": G.number_of_nodes(),
+                    "n_edges": G.number_of_edges(),
+                    "node_types": list({G.nodes[n]["node_type"] for n in G.nodes}),
+                    "edge_types": list({G.edges[e]["edge_type"] for e in G.edges}),
+                },
+                "graph_nodes": graph_dict["nodes"],
+                "graph_edges": graph_dict["edges"],
+                "trade_dependency": trade_dep,
+                "port_dependency": port_dep,
+                "critical_ports": self._extract_critical_ports(critical, bottleneck),
+                "bottleneck_analysis": bottleneck,
+                "alternative_paths": alt_paths,
+                "network_resilience": network_resilience,
+                "regional_dependency": regional,
+                "propagation_paths": propagation,
+                "network_metrics": {
+                    "node_strength": analytics.get("node_strength", {}),
+                    "betweenness_centrality": betweenness,
+                    "degree_analysis": analytics.get("degree_analysis", {}),
+                    "connectivity": analytics.get("connectivity", {}),
+                    "commodity_concentration": analytics.get("commodity_concentration", {}),
+                    "critical_nodes": critical,
+                },
+                "scenario_exposure": {
+                    "effective_shock": effective_shock,
+                    "max_port_exposure": prop_summary.get("max_port_exposure"),
+                    "max_state_exposure": prop_summary.get("max_state_exposure"),
+                    "max_district_exposure": prop_summary.get("max_district_exposure"),
+                    "n_ports_in_propagation": prop_summary.get("n_ports_in_propagation"),
+                    "n_states_in_propagation": prop_summary.get("n_states_in_propagation"),
+                    "n_districts_in_propagation": prop_summary.get("n_districts_in_propagation"),
+                    "top_exposed_districts": propagation.get("top_exposed_districts", []) if isinstance(propagation, dict) else [],
+                    "exposed_states": propagation.get("exposed_states", []) if isinstance(propagation, dict) else [],
+                    "disclaimer": propagation.get("research_disclaimer", "") if isinstance(propagation, dict) else "",
+                },
                 "risk_indicators": risk_indicators,
-                "limitations": limitations,
+                "ml_cascade_context": ml_context,
+                "confidence": self._compute_confidence(trade_share, port_dep, analytics),
+                "limitations": self._standard_limitations(commodity, trade_share),
                 "provenance_tags": {
-                    "port_cargo": "[PORT DATA] source: Port-wise Cargo at Major Ports",
-                    "commodity_cargo": "[PORT DATA] source: Commodity-wise Cargo at Major Ports",
-                    "container": "[PORT DATA] source: Container Traffic at Major Ports",
-                    "state": "[PORT DATA] source: State-wise Cargo Traffic at Indian Ports",
-                    "effective_shock": "[RULE-BASED OUTPUT]",
-                    "risk_indicators": "[RULE-BASED OUTPUT]",
-                    "trade_direction": "[USER / CLI PARAMETER]",
+                    "graph_structure": "[GRAPH-DERIVED] from NetworkX MultiDiGraph",
+                    "port_cargo": "[PORT DATA] Ministry of Ports, Shipping and Waterways",
+                    "port_affinity": "[RULE-BASED OUTPUT] inferred_affinity from port specialisation",
+                    "trade_relationship": "[USER / CLI PARAMETER]",
+                    "agricultural_production": "[AGRICULTURE DATA] crop-wise-area-production-yield.csv",
+                    "risk_indicators": "[RULE-BASED OUTPUT] + [GRAPH-DERIVED]",
+                    "ml_context": "[ML MODEL OUTPUT]" if ml_predictions else "N/A",
+                    "propagation": "[GRAPH-DERIVED]",
                 },
             },
-            "provenance": provenance,
+            "provenance": [
+                {
+                    "source_type": "[PORT DATA]",
+                    "dataset": "port_statistics.csv",
+                    "origin": "Ministry of Ports, Shipping and Waterways (MoPSW)",
+                    "years": "2023-24, 2024-25",
+                },
+                {
+                    "source_type": "[AGRICULTURE DATA]",
+                    "dataset": "crop-wise-area-production-yield.csv",
+                    "years": "2017-18 to 2022-23",
+                },
+                {
+                    "source_type": "[GRAPH-DERIVED]",
+                    "description": "NetworkX MultiDiGraph analytics and propagation",
+                    "graph_type": "Heterogeneous, weighted, directed MultiDiGraph",
+                },
+            ],
         }
+
+        return result
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_latest_port_cargo(self, t2: pd.DataFrame) -> pd.DataFrame:
-        """Get most recent year port cargo rows from trusted T2."""
-        if t2.empty:
-            return t2
-        # Prefer 2024-25 rows, then 2023-24
-        latest_year = sorted(t2["year"].unique(), reverse=True)
-        for yr in latest_year:
-            sub = t2[t2["year"] == yr]
-            if len(sub) >= 5:
-                return sub
-        return t2
+    def _extract_critical_ports(self, critical: Dict, bottleneck: Dict) -> List[Dict]:
+        """Combine critical node analysis and bottleneck analysis into a clean port list."""
+        critical_ports = []
+        seen = set()
 
-    def _identify_relevant_ports(self, commodity: str, hs4: int) -> List[Dict[str, Any]]:
-        """
-        Identify ports with known affinity to this commodity.
-        Returns list of port dicts with reasoning.
-        """
-        c_lower = commodity.strip().lower()
-        port_cat = COMMODITY_TO_PORT_CATEGORY.get(c_lower, "general cargo")
-
-        results = []
-        for port, affinities in PORT_COMMODITY_AFFINITY.items():
-            matched = [a for a in affinities
-                       if c_lower in a.lower() or a.lower() in c_lower
-                       or port_cat in a.lower()]
-            if matched:
-                results.append({
-                    "port": port,
-                    "affinity_basis": matched,
-                    "note": f"Port has known handling affinity for {', '.join(matched)} cargo.",
-                    "provenance": "[PORT DATA] Based on known port specialisation",
+        # From bottleneck analysis
+        for b in bottleneck.get("bottlenecks", []):
+            name = b.get("name", "")
+            if name not in seen:
+                seen.add(name)
+                critical_ports.append({
+                    "port": name,
+                    "risk_level": b.get("risk_level", "MODERATE"),
+                    "betweenness_centrality": b.get("betweenness_centrality"),
+                    "cargo_share_pct": b.get("cargo_share_pct"),
+                    "identification_basis": "bottleneck_analysis",
+                    "note": b.get("explanation", ""),
+                    "provenance": "[GRAPH-DERIVED] + [PORT DATA]",
                 })
 
-        if not results:
-            results.append({
-                "port": "Unable to determine specific port",
-                "affinity_basis": [],
-                "note": f"No specific port affinity identified for commodity '{commodity}'. "
-                        "General cargo ports (JNPA, Deendayal, Chennai) handle residual categories.",
-                "provenance": "[RULE-BASED OUTPUT]",
-            })
-        return results
-
-    def _compute_port_dependency(
-        self, port_cargo: pd.DataFrame, relevant_ports: List[Dict]
-    ) -> List[Dict[str, Any]]:
-        """
-        For each relevant port, attach actual traffic data (if available).
-        """
-        if port_cargo.empty:
-            return [{"note": "Insufficient data", "provenance": "[PORT DATA]"}]
-
-        total_all = port_cargo["total_mt"].sum()
-        results = []
-        relevant_names = [p["port"] for p in relevant_ports if p.get("port") != "Unable to determine specific port"]
-
-        for port_name in relevant_names:
-            port_row = port_cargo[port_cargo["port"].str.contains(port_name[:12], case=False, na=False)]
-            if port_row.empty:
-                results.append({
-                    "port": port_name,
-                    "year": "N/A",
-                    "total_mt": None,
-                    "overseas_mt": None,
-                    "coastal_mt": None,
-                    "share_of_all_ports_pct": None,
-                    "note": f"No port cargo data available for {port_name} in trusted dataset.",
-                    "provenance": "[PORT DATA] Not available",
-                })
-                continue
-
-            row = port_row.iloc[0]
-            total_mt = float(row["total_mt"]) if pd.notna(row["total_mt"]) else None
-            overseas  = float(row["overseas_mt"]) if pd.notna(row.get("overseas_mt")) else None
-            coastal   = float(row["coastal_mt"])  if pd.notna(row.get("coastal_mt"))  else None
-            share_pct = round(100.0 * total_mt / total_all, 2) if total_mt and total_all > 0 else None
-
-            # Dependency classification
-            if share_pct is not None:
-                if share_pct >= 20:
-                    dep_level = "HIGH — observed logistics concentration"
-                elif share_pct >= 10:
-                    dep_level = "MODERATE — meaningful traffic share"
-                else:
-                    dep_level = "LOW — minor share of total port traffic"
-            else:
-                dep_level = "UNKNOWN — data not available"
-
-            results.append({
-                "port": port_name,
-                "year": str(row.get("year", "N/A")),
-                "total_mt": total_mt,
-                "overseas_mt": overseas,
-                "coastal_mt": coastal,
-                "share_of_all_major_ports_pct": share_pct,
-                "dependency_level": dep_level,
-                "note": (
-                    f"Port handled approximately {total_mt:.1f} MT total cargo "
-                    f"({overseas:.1f} MT overseas, {coastal:.1f} MT coastal), "
-                    f"representing ~{share_pct:.1f}% of all Major Port traffic. "
-                    "This indicates observed traffic concentration, not causal attribution."
-                ) if total_mt else "Data unavailable",
-                "source_table": str(row.get("source_table", "N/A")),
-                "source_page": str(row.get("source_page", "N/A")),
-                "source_year_pdf": str(row.get("source_year_pdf", "N/A")),
-                "provenance": "[PORT DATA] Port-wise Cargo at Major Ports",
-            })
-
-        return results if results else [{"note": "No matching port data", "provenance": "[PORT DATA]"}]
-
-    def _get_commodity_context(
-        self, t3: pd.DataFrame, commodity: str, hs4: int
-    ) -> List[Dict[str, Any]]:
-        """
-        Get commodity-wise cargo data at Major Ports.
-        Match by commodity name proximity to T3 commodity column.
-        """
-        if t3.empty:
-            return [{"note": "Commodity cargo data not available", "provenance": "[PORT DATA]"}]
-
-        c_lower = commodity.strip().lower()
-
-        # Map commodity to port commodity category
-        COMM_KEYWORD_MAP = {
-            "rice": ["food-grain", "others"],
-            "wheat": ["food-grain", "others"],
-            "maize": ["food-grain", "others"],
-            "coal": ["coal"],
-            "iron ore": ["iron ore"],
-            "fertilizer": ["fertilizer"],
-            "palm oil": ["others"],
-            "soybean": ["others"],
-            "sugar": ["others"],
-            "pepper": ["others"],
-            "cotton": ["others"],
-        }
-        keywords = COMM_KEYWORD_MAP.get(c_lower, ["others"])
-
-        # Get latest year data
-        latest_years = sorted(t3["year"].unique(), reverse=True)
-        results = []
-        for yr in latest_years[:2]:
-            yr_df = t3[t3["year"] == yr]
-            if yr_df.empty:
-                continue
-            total_row = yr_df[yr_df["commodity"].str.lower() == "total"]
-            total_mt_all = float(total_row["total_mt"].iloc[0]) if len(total_row) > 0 else None
-
-            for kw in keywords:
-                matching = yr_df[yr_df["commodity"].str.lower().str.contains(kw, na=False)]
-                for _, row in matching.iterrows():
-                    comm_mt = float(row["total_mt"]) if pd.notna(row["total_mt"]) else None
-                    share = (
-                        round(100.0 * comm_mt / total_mt_all, 2)
-                        if comm_mt and total_mt_all
-                        else None
-                    )
-                    results.append({
-                        "year": yr,
-                        "commodity_category": str(row["commodity"]),
-                        "total_mt": comm_mt,
-                        "share_of_all_major_port_cargo_pct": share,
-                        "note": (
-                            f"Major Port commodity category '{row['commodity']}' handled "
-                            f"{comm_mt:.2f} MT in {yr}"
-                            + (f" (~{share:.1f}% of total Major Port cargo)" if share else "")
-                            + f". Commodity '{commodity}' may fall under this category."
-                        ),
-                        "source_table": str(row.get("source_table", "N/A")),
-                        "source_page": str(row.get("source_page", "N/A")),
-                        "source_year_pdf": str(row.get("source_year_pdf", "N/A")),
-                        "provenance": "[PORT DATA] Commodity-wise Cargo at Major Ports",
+        # From critical node analysis
+        for cn in critical.get("critical_nodes", []):
+            if cn.get("node_type") == "port":
+                name = cn.get("name", "")
+                if name not in seen:
+                    seen.add(name)
+                    critical_ports.append({
+                        "port": name,
+                        "risk_level": "MODERATE",
+                        "betweenness_centrality": cn.get("betweenness_centrality"),
+                        "composite_importance": cn.get("composite_importance"),
+                        "identification_basis": "critical_node_analysis",
+                        "provenance": "[GRAPH-DERIVED]",
                     })
 
-        if not results:
-            return [{
-                "note": (
-                    f"No commodity category match for '{commodity}' in Major Port statistics. "
-                    "The commodity may fall under 'Others' which aggregates multiple categories."
-                ),
-                "provenance": "[PORT DATA]",
-            }]
-        return results
-
-    def _get_container_dependency(
-        self, t4: pd.DataFrame, commodity: str, hs4: int
-    ) -> List[Dict[str, Any]]:
-        """
-        Assess container dependency for the commodity.
-        Containerised commodities: rice, wheat (packed), general goods, pepper, spices.
-        Bulk commodities (NOT typically containerised): coal, iron ore, fertilizer raw material.
-        """
-        c_lower = commodity.strip().lower()
-        BULK_COMMODITIES = {"coal", "iron ore", "fertilizer", "crude oil", "pol"}
-        CONTAINER_COMMODITIES = {"rice", "wheat", "pepper", "spices", "turmeric",
-                                  "ginger", "sugar", "cotton", "pulses", "gram"}
-
-        if c_lower in BULK_COMMODITIES:
-            return [{
-                "note": (
-                    f"'{commodity}' is typically transported as bulk cargo (not containerised). "
-                    "Container traffic statistics are not the primary logistics channel for this commodity."
-                ),
-                "container_relevant": False,
-                "provenance": "[RULE-BASED OUTPUT]",
-            }]
-
-        if t4.empty:
-            return [{"note": "Container traffic data not available", "provenance": "[PORT DATA]"}]
-
-        # Get aggregate container stats for latest year
-        latest_year = sorted(t4["year"].unique(), reverse=True)[0] if not t4.empty else None
-        if not latest_year:
-            return [{"note": "No container data available", "provenance": "[PORT DATA]"}]
-
-        yr_t4 = t4[t4["year"] == latest_year]
-        total_teus = yr_t4["container_teus_000"].sum()
-        total_mt   = yr_t4["container_tonnes_mt"].sum()
-
-        # Top container ports
-        top_ports = (
-            yr_t4.sort_values("container_teus_000", ascending=False)
-            .head(5)[["port", "container_tonnes_mt", "container_teus_000"]]
-            .to_dict("records")
-        )
-
-        container_relevant = c_lower in CONTAINER_COMMODITIES
-
-        return [{
-            "year": latest_year,
-            "container_relevant": container_relevant,
-            "total_container_traffic_mt": round(float(total_mt), 2),
-            "total_container_traffic_000_teus": round(float(total_teus), 2),
-            "top_container_ports": top_ports,
-            "note": (
-                f"'{commodity}' {'is commonly' if container_relevant else 'may occasionally be'} "
-                f"transported via containers. Major Port total container traffic: "
-                f"{total_mt:.1f} MT ({total_teus:.0f} thousand TEUs) in {latest_year}. "
-                "This indicates potential container logistics exposure if supply chains are disrupted."
-            ) if container_relevant else (
-                f"Container exposure for '{commodity}' is considered LOW (bulk commodity). "
-                f"Total Major Port container traffic: {total_mt:.1f} MT ({total_teus:.0f} 000 TEUs) in {latest_year}."
-            ),
-            "source_year_pdf": latest_year,
-            "provenance": "[PORT DATA] Container Traffic at Major Ports",
-        }]
-
-    def _get_state_logistics(self, t6: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Get state-wise cargo distribution context."""
-        if t6.empty:
-            return [{"note": "State-wise cargo data not available", "provenance": "[PORT DATA]"}]
-
-        latest_year = sorted(t6["year"].unique(), reverse=True)[0]
-        yr_t6 = t6[t6["year"] == latest_year].copy()
-
-        # Sort by total_mt
-        yr_t6 = yr_t6.dropna(subset=["total_mt"]).sort_values("total_mt", ascending=False)
-        grand_total = yr_t6["total_mt"].sum()
-
-        results = []
-        for _, row in yr_t6.head(5).iterrows():
-            share = round(100 * float(row["total_mt"]) / grand_total, 1) if grand_total > 0 else None
-            results.append({
-                "state": str(row["port"]),  # 'port' column holds state name in T6
-                "year": latest_year,
-                "major_port_mt": float(row["major_port_mt"]) if pd.notna(row.get("major_port_mt")) else None,
-                "non_major_port_mt": float(row["non_major_port_mt"]) if pd.notna(row.get("non_major_port_mt")) else None,
-                "total_mt": float(row["total_mt"]),
-                "share_of_india_total_pct": share,
-                "note": f"State handled {float(row['total_mt']):.1f} MT ({share:.1f}% of Indian port traffic) in {latest_year}.",
-                "source_table": str(row.get("source_table", "N/A")),
-                "source_page": str(row.get("source_page", "N/A")),
-                "provenance": "[PORT DATA] State-wise Cargo Traffic at Indian Ports",
-            })
-
-        return results
-
-    def _identify_bottlenecks(
-        self,
-        port_cargo: pd.DataFrame,
-        relevant_ports: List[Dict],
-        trade_type: str,
-        effective_shock: float,
-    ) -> List[Dict[str, Any]]:
-        """
-        Identify potential bottleneck scenarios.
-        High share + high shock = potential logistics bottleneck.
-        All language is hedged (potential, may indicate, observed).
-        """
-        bottlenecks = []
-
-        if port_cargo.empty:
-            return [{"note": "Insufficient data to assess bottlenecks", "provenance": "[PORT DATA]"}]
-
-        total_all = port_cargo["total_mt"].sum() if not port_cargo.empty else 0
-
-        for port_info in relevant_ports:
-            port_name = port_info.get("port", "")
-            if port_name == "Unable to determine specific port":
-                continue
-            prow = port_cargo[port_cargo["port"].str.contains(port_name[:12], case=False, na=False)]
-            if prow.empty:
-                continue
-            p_total = float(prow.iloc[0]["total_mt"]) if pd.notna(prow.iloc[0]["total_mt"]) else 0
-            share = 100 * p_total / total_all if total_all > 0 else 0
-
-            if share >= 15 and effective_shock > 0.1:
-                bottlenecks.append({
-                    "port": port_name,
-                    "observed_share_pct": round(share, 1),
-                    "effective_shock": round(effective_shock, 4),
-                    "level": "POTENTIAL HIGH" if share >= 20 else "POTENTIAL MODERATE",
-                    "note": (
-                        f"{port_name} handles ~{share:.1f}% of Major Port cargo. "
-                        f"Combined with effective shock exposure of {effective_shock:.3f}, "
-                        "this suggests potential logistics concentration risk. "
-                        "This is an observed traffic pattern, not a causal prediction."
-                    ),
-                    "provenance": "[RULE-BASED OUTPUT] based on [PORT DATA]",
-                })
-
-        if not bottlenecks:
-            bottlenecks.append({
-                "note": (
-                    "No single port identified as a high-concentration bottleneck for this "
-                    "commodity+shock combination. Cargo distribution across Major Ports reduces "
-                    "single-point logistics dependency risk."
-                ),
-                "provenance": "[RULE-BASED OUTPUT]",
-            })
-
-        return bottlenecks
+        return critical_ports
 
     def _compute_risk_indicators(
         self,
         trade_share: float,
         effective_shock: float,
-        trade_type: str,
-        port_dependency: List[Dict],
-        commodity_context: List[Dict],
+        trade_dep: Dict,
+        port_dep: Dict,
+        bottleneck: Dict,
+        alt_paths: Dict,
         ml_predictions: Optional[Dict],
-    ) -> List[Dict[str, Any]]:
-        """
-        Compute rule-based risk indicators from available data.
-        """
+    ) -> List[Dict]:
         indicators = []
 
-        # Trade share indicator
-        if trade_share >= 15:
-            ts_level = "HIGH"
-            ts_note = f"Partner trade share of {trade_share:.1f}% indicates high bilateral dependency."
-        elif trade_share >= 5:
-            ts_level = "MODERATE"
-            ts_note = f"Partner trade share of {trade_share:.1f}% suggests moderate bilateral exposure."
-        else:
-            ts_level = "LOW"
-            ts_note = f"Partner trade share of {trade_share:.1f}% suggests limited bilateral dependency."
-
+        # 1. Trade dependency
+        dep_level = trade_dep.get("dependency_level", "LOW")
         indicators.append({
-            "indicator": "Trade Share Concentration",
-            "level": ts_level,
+            "indicator": "Trade Share Exposure",
+            "level": dep_level,
             "value": trade_share,
-            "note": ts_note,
-            "provenance": "[USER / CLI PARAMETER]",
+            "note": f"Trade Share Exposure: {trade_share:.1f}%. Partner-country share of the relevant trade exposure.",
+            "provenance": "[USER / CLI PARAMETER] → [GRAPH-DERIVED]",
         })
 
-        # Effective shock indicator
-        eff_level = "HIGH" if effective_shock > 0.2 else ("MODERATE" if effective_shock > 0.05 else "LOW")
+        # 2. Effective shock
+        eff_level = "HIGH" if effective_shock >= 0.15 else "MODERATE" if effective_shock >= 0.05 else "LOW"
         indicators.append({
             "indicator": "Effective Shock Exposure",
             "level": eff_level,
-            "value": round(effective_shock, 4),
-            "formula": "shock_intensity × (trade_share / 100)",
-            "note": f"Effective shock exposure = {effective_shock:.4f} "
-                    f"(shock_intensity × trade_share%). "
-                    "Higher values indicate greater potential transmission channel.",
-            "provenance": "[RULE-BASED OUTPUT]",
+            "value": effective_shock,
+            "note": (
+                f"Effective shock = {effective_shock:.4f} "
+                f"(shock_intensity × trade_share%). Higher values indicate greater exposure."
+            ),
+            "provenance": "[USER / CLI PARAMETER] → [GRAPH-DERIVED]",
         })
 
-        # ML cascade context (if provided)
+        # 3. Port bottleneck
+        n_bottlenecks = bottleneck.get("n_bottlenecks_identified", 0)
+        if n_bottlenecks > 0:
+            top_bottleneck = bottleneck.get("bottlenecks", [{}])[0]
+            bt_level = top_bottleneck.get("risk_level", "MODERATE")
+            indicators.append({
+                "indicator": "Port Bottleneck Exposure",
+                "level": bt_level,
+                "value": n_bottlenecks,
+                "note": f"{n_bottlenecks} potential port bottleneck(s) identified. Top: {top_bottleneck.get('name', 'N/A')} ({bt_level}).",
+                "provenance": "[GRAPH-DERIVED] + [PORT DATA]",
+            })
+
+        # 4. Port HHI concentration (structural metric; not labeled as arbitrary risk)
+        hhi = port_dep.get("port_concentration_hhi")
+        if hhi is not None:
+            indicators.append({
+                "indicator": "Port Cargo Concentration (HHI)",
+                "level": "INFO",
+                "value": round(hhi, 4),
+                "note": (
+                    f"Port cargo HHI = {hhi:.4f}. "
+                    "0 = distributed across ports, 1 = concentrated in a single port."
+                ),
+                "provenance": "[GRAPH-DERIVED] + [PORT DATA]",
+            })
+
+        # 6. ML signals
         if ml_predictions:
-            trade_ret = ml_predictions.get("trade", {}).get("Trade_Return_1M_Pred")
-            if trade_ret is not None:
+            trade_return = ml_predictions.get("trade", {}).get("Trade_Return_1M_Pred")
+            prod_growth = ml_predictions.get("agriculture", {}).get("Production_Growth_Pred")
+            prod_risk = ml_predictions.get("agriculture", {}).get("Production_Risk", "")
+
+            if trade_return is not None:
+                ml_trade_level = "HIGH" if abs(trade_return) >= 3 else "MODERATE" if abs(trade_return) >= 1 else "LOW"
                 indicators.append({
-                    "indicator": "ML Cascade Trade Signal",
-                    "level": "NEGATIVE" if trade_ret < 0 else "POSITIVE",
-                    "value": round(trade_ret, 4),
-                    "note": (
-                        f"Model A projects a trade flow return of {trade_ret:+.2f}% for this scenario. "
-                        "Combined with supply-chain context, this "
-                        + ("reinforces logistics disruption risk." if trade_ret < 0 else "suggests stable trade flow context.")
-                    ),
+                    "indicator": "ML Model A — Trade Signal",
+                    "level": ml_trade_level,
+                    "value": f"{trade_return:+.2f}%",
+                    "note": f"Model A projects {trade_return:+.2f}% trade return. Negative = contraction.",
+                    "provenance": "[ML MODEL OUTPUT]",
+                })
+
+            if prod_growth is not None:
+                ml_prod_level = str(prod_risk).upper() if prod_risk else ("HIGH" if prod_growth < -2 else "MODERATE")
+                indicators.append({
+                    "indicator": "ML Model B — Production Signal",
+                    "level": ml_prod_level,
+                    "value": f"{prod_growth:+.2f}% | Risk: {prod_risk}",
+                    "note": f"Model B national production growth: {prod_growth:+.2f}%, Risk tier: {prod_risk}",
                     "provenance": "[ML MODEL OUTPUT]",
                 })
 
         return indicators
 
-    def _standard_limitations(self, commodity: str, hs4: int) -> List[str]:
+    def _extract_ml_context(
+        self, ml_predictions: Optional[Dict], effective_shock: float, trade_share: float
+    ) -> Dict[str, Any]:
+        if not ml_predictions:
+            return {"note": "No ML predictions provided.", "provenance": "N/A"}
+
+        return {
+            "trade_return_1m": ml_predictions.get("trade", {}).get("Trade_Return_1M_Pred"),
+            "production_growth_pct": ml_predictions.get("agriculture", {}).get("Production_Growth_Pred"),
+            "production_risk": ml_predictions.get("agriculture", {}).get("Production_Risk"),
+            "price_return_1m": ml_predictions.get("price", {}).get("Price_Return_1M_Pred"),
+            "agri_gva_growth": ml_predictions.get("economy", {}).get("Agri_GVA_Growth_Pred"),
+            "inflation_change": ml_predictions.get("economy", {}).get("Inflation_Change_Pred"),
+            "note": (
+                "ML cascade predictions provide national-level quantitative forecasts. "
+                "Supply-chain graph provides logistics and port dependency context. "
+                "These are complementary — ML output is statistical, graph output is structural."
+            ),
+            "provenance": "[ML MODEL OUTPUT]",
+        }
+
+    def _compute_confidence(
+        self, trade_share: float, port_dep: Dict, analytics: Dict
+    ) -> Dict[str, Any]:
+        """
+        Structured confidence assessment for the supply-chain analysis.
+        Not a probability — a data-quality / reliability assessment.
+        """
+        issues = []
+        if trade_share == 5.0:
+            issues.append("trade_share uses default value (5.0%); actual value may differ")
+
+        n_ports_no_data = sum(
+            1 for p in port_dep.get("port_dependencies", [])
+            if p.get("data_quality") == "NO_DATA"
+        )
+        if n_ports_no_data > 0:
+            issues.append(f"{n_ports_no_data} relevant ports have no cargo data in trusted dataset")
+
+        all_inferred = all(
+            p.get("relationship_type") == "inferred_affinity"
+            for p in port_dep.get("port_dependencies", [])
+        )
+        if all_inferred:
+            issues.append("All commodity-port relationships are inferred affinity (not observed routes)")
+
+        overall = "MEDIUM" if not issues else "LOW" if len(issues) >= 2 else "MEDIUM-LOW"
+
+        return {
+            "overall": overall,
+            "issues": issues,
+            "note": (
+                "Confidence reflects data quality and model assumptions, "
+                "NOT a statistical probability of disruption."
+            ),
+        }
+
+    def _standard_limitations(self, commodity: str, trade_share: float) -> List[str]:
         return [
-            "Supply-chain analysis is based on aggregate Major Port statistics from Ministry of "
-            "Ports, Shipping and Waterways publications (2023-24 and 2024-25).",
-            "Port affinity mappings are based on publicly known port specialisations, not real-time data.",
-            "The analysis indicates exposure and dependency patterns, not causal responsibility.",
-            "Data does not include Minor/Non-Major port cargo for all states.",
-            "Commodity-specific port routing is not available at granular trade-lane level.",
-            f"No direct commodity-level port routing data available for HS4={hs4} ('{commodity}').",
-            "Capacity utilisation data from 2023-24 PDF was flagged as potentially mis-parsed; "
-            "it is excluded from this analysis.",
-            "Pre-Berthing Detention and Turn Round Time data excluded due to extraction ambiguity.",
+            "Supply-chain analysis is based on aggregate Major Port statistics from MoPSW (2023-24, 2024-25).",
+            "Port affinity mappings are based on publicly known port specialisations, not observed commodity-specific trade-lane data.",
+            "The analysis indicates exposure and dependency patterns — not causal responsibility for disruption.",
+            "PORT_STATE edges represent geographic port location, NOT cargo destination routing.",
+            "HANDLES edges are inferred affinities; confidence values reflect model assumptions.",
+            "Non-major ports (handles ~30% of India's sea cargo) are not included in this analysis.",
+            "Agricultural production data covers 2017-18 to 2022-23; more recent seasons not included.",
+            f"Trade share ({trade_share}%) is user-specified; actual bilateral trade share may differ.",
+            "Graph-derived metrics (betweenness, centrality) reflect the modeled topology, not observed logistics.",
+            "Shock propagation uses decay parameters (HANDLES_DECAY=0.85, PORT_STATE_DECAY=0.70) based on modeling assumptions.",
         ]
 
-    def _build_provenance(
-        self, t2: pd.DataFrame, t3: pd.DataFrame, t4: pd.DataFrame, t6: pd.DataFrame
-    ) -> List[Dict[str, Any]]:
-        entries = []
-        for sub, label in [(t2, "T2 Port Cargo"), (t3, "T3 Commodity"), (t4, "T4 Container"), (t6, "T6 State")]:
-            if not sub.empty:
-                src_tables = sub["source_table"].unique().tolist() if "source_table" in sub.columns else []
-                entries.append({
-                    "source_type": "[PORT DATA]",
-                    "table_label": label,
-                    "source_tables": src_tables,
-                    "n_rows_used": len(sub),
-                    "years_covered": sorted(sub["year"].unique().tolist()) if "year" in sub.columns else [],
-                })
-        return entries
-
-    def _insufficient_data(
-        self, commodity: str, hs4: int, trade_type: str,
-        event_country: str, reason: str
+    def _error_output(
+        self, commodity: str, hs4: int, trade_type: str, event_country: str,
+        effective_shock: float, error: str
     ) -> Dict[str, Any]:
         return {
             "supply_chain_analysis": {
-                "commodity": commodity,
-                "hs4": hs4,
-                "trade_type": trade_type,
-                "affected_country": event_country,
-                "relevant_ports": [],
-                "port_cargo_context": [],
-                "commodity_port_context": [],
-                "container_dependency": [],
-                "state_logistics_context": [],
-                "potential_bottlenecks": [],
-                "risk_indicators": [],
-                "limitations": [reason, "Insufficient data — cannot produce supply-chain analysis."],
+                "scenario": {
+                    "commodity": commodity, "hs4": hs4,
+                    "trade_type": trade_type, "affected_country": event_country,
+                    "effective_shock": effective_shock,
+                },
+                "error": error,
+                "graph_summary": {},
+                "graph_nodes": [], "graph_edges": [],
+                "trade_dependency": {}, "port_dependency": {},
+                "critical_ports": [], "bottleneck_analysis": {},
+                "alternative_paths": {}, "regional_dependency": {},
+                "propagation_paths": {}, "network_metrics": {},
+                "scenario_exposure": {}, "risk_indicators": [],
+                "ml_cascade_context": {}, "confidence": {},
+                "limitations": [error, "Graph construction failed."],
+                "provenance_tags": {},
             },
             "provenance": [],
         }
+
+    @staticmethod
+    def format_report(analysis_result: Dict[str, Any]) -> str:
+        """
+        Formats SupplyChainAgent analysis into a clean, human-readable terminal report.
+        """
+        sca = analysis_result.get("supply_chain_analysis", analysis_result)
+        scenario = sca.get("scenario", {})
+        lines = []
+        hr = "=" * 60
+
+        lines.append(hr)
+        lines.append("SUPPLY CHAIN ANALYSIS")
+        lines.append(hr)
+        lines.append("")
+
+        # SCENARIO
+        lines.append("SCENARIO")
+        lines.append("--------")
+        lines.append(f"Commodity        : {scenario.get('commodity', sca.get('commodity', 'N/A'))}")
+        lines.append(f"HS4              : {scenario.get('hs4', sca.get('hs4', 'N/A'))}")
+        lines.append(f"Trade Type       : {scenario.get('trade_type', sca.get('trade_type', 'N/A'))}")
+        lines.append(f"Trade Direction  : {scenario.get('trade_direction', sca.get('trade_direction', 'N/A'))}")
+        lines.append(f"Affected Country : {scenario.get('affected_country', sca.get('affected_country', 'N/A'))}")
+        eff_shock = scenario.get('effective_shock', sca.get('effective_shock'))
+        eff_shock_str = f"{eff_shock:.4f}" if eff_shock is not None else "Unavailable"
+        lines.append(f"Effective Shock  : {eff_shock_str}")
+        lines.append("")
+
+        # TRADE EXPOSURE
+        lines.append("TRADE EXPOSURE")
+        lines.append("--------------")
+        ts = scenario.get('trade_share_pct', sca.get('trade_share_pct'))
+        ts_str = f"{ts:.2f}%" if ts is not None else "Unavailable"
+        lines.append(f"Trade Share Exposure    : {ts_str}")
+        lines.append("  Partner-country share of the relevant trade exposure.")
+        lines.append(f"Effective Shock Exposure: {eff_shock_str}")
+        lines.append("")
+
+        # PORT NETWORK
+        lines.append("PORT NETWORK")
+        lines.append("------------")
+        port_dep = sca.get("port_dependency", {})
+        relevant_ports = port_dep.get("relevant_ports", sca.get("relevant_ports", []))
+        if relevant_ports:
+            lines.append("Relevant Ports:")
+            for p in relevant_ports:
+                p_name = p.get("port", "Unknown Port")
+                state = p.get("state", "")
+                cargo = p.get("cargo_mt")
+                share = p.get("share_pct")
+                extra = []
+                if state:
+                    extra.append(state)
+                if cargo is not None:
+                    extra.append(f"Cargo: {cargo:.1f} MT")
+                if share is not None:
+                    extra.append(f"Share: {share:.1f}%")
+                detail = f" - {', '.join(extra)}" if extra else ""
+                lines.append(f"  * {p_name}{detail}")
+        else:
+            lines.append("  No relevant handling ports identified.")
+        lines.append("")
+
+        # RISK INDICATORS
+        lines.append("RISK INDICATORS")
+        lines.append("---------------")
+        indicators = sca.get("risk_indicators", [])
+        hhi_val = None
+        for ind in indicators:
+            name = ind.get("indicator", "")
+            lvl = ind.get("level", "INFO")
+            val = ind.get("value", "")
+            note = ind.get("note", "")
+            if "HHI" in name:
+                hhi_val = val
+                continue
+            lines.append(f"[{lvl:<8s}] {name}")
+            if note:
+                lines.append(f"           {note}")
+            lines.append("")
+
+        if hhi_val is not None:
+            lines.append(f"Port Cargo Concentration (HHI): {hhi_val}")
+            lines.append("  0 = distributed across ports")
+            lines.append("  1 = concentrated in a single port")
+            lines.append("")
+
+        # NETWORK RESILIENCE
+        lines.append("NETWORK RESILIENCE")
+        lines.append("------------------")
+        alt_paths = sca.get("alternative_paths", {})
+        alt_ports = alt_paths.get("alternative_ports", [])
+        lines.append(f"Modeled Alternative Handling Ports: {len(alt_ports)}")
+        if alt_ports:
+            lines.append("")
+            for idx, ap in enumerate(alt_ports, 1):
+                p_name = ap.get("port", "Unknown")
+                state = ap.get("state", "Unknown")
+                conf = ap.get("confidence")
+                cargo = ap.get("cargo_mt")
+                share = ap.get("share_pct")
+                lines.append(f"  {idx}. {p_name} - {state}")
+                if conf is not None:
+                    lines.append(f"     Inferred affinity confidence: {conf:.2f}")
+                cargo_str = f"{cargo:.1f} MT" if cargo is not None else "Unavailable"
+                share_str = f"{share:.1f}%" if share is not None else "Unavailable"
+                lines.append(f"     Cargo context: {cargo_str}  |  Share: {share_str}")
+                lines.append("")
+        else:
+            lines.append("  No modeled alternative handling ports identified.")
+            lines.append("")
+
+        container_dep = sca.get("network_resilience", {}).get(
+            "container_dependency", port_dep.get("container_dependency")
+        )
+        if container_dep and container_dep != "N/A":
+            lines.append(f"Container Dependency: {container_dep}")
+            lines.append("")
+
+        # LIMITATIONS
+        lines.append("LIMITATIONS")
+        lines.append("-----------")
+        limitations = sca.get("limitations", [])
+        if limitations:
+            for lim in limitations[:4]:
+                lines.append(f"* {lim}")
+        lines.append("")
+
+        # PROVENANCE
+        lines.append("PROVENANCE")
+        lines.append("----------")
+        prov_tags = sca.get("provenance_tags", {})
+        if prov_tags:
+            for k, v in prov_tags.items():
+                clean_k = k.replace("_", " ").title()
+                lines.append(f"* {clean_k:<24s}: {v}")
+        lines.append("")
+        lines.append(hr)
+
+        return "\n".join(lines)
+

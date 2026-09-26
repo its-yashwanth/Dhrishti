@@ -28,6 +28,12 @@ from typing import Dict, Any, Optional, List
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from llm.gemini_client import GeminiClient
 from agents.event_intelligence_agent import EventIntelligenceAgent
 from agents.impact_interpretation_agent import ImpactInterpretationAgent
@@ -197,6 +203,7 @@ class DrishtiAgentOrchestrator:
             except Exception as _sc_err:
                 supply_chain_output = {"error": str(_sc_err)}
 
+
         if self.vulnerability_agent is not None:
             try:
                 vulnerability_output = self.vulnerability_agent.analyse(
@@ -205,6 +212,7 @@ class DrishtiAgentOrchestrator:
                     trade_type=trade_type,
                     shock_direction=structured_event.get("shock_direction", "supply_contraction"),
                     ml_predictions=ml_predictions,
+                    supply_chain_output=supply_chain_output,
                 )
             except Exception as _vu_err:
                 vulnerability_output = {"error": str(_vu_err)}
@@ -314,6 +322,7 @@ class DrishtiAgentOrchestrator:
                     trade_type=structured_event.get("trade_type", trade_type or "Import"),
                     shock_direction=structured_event.get("shock_direction", "supply_contraction"),
                     ml_predictions=ml_predictions,
+                    supply_chain_output=supply_chain_output,
                 )
             except Exception as _vu_err:
                 vulnerability_output = {"error": str(_vu_err)}
@@ -705,6 +714,52 @@ def print_formatted_report(result: Dict[str, Any]):
             for a in actions_list:
                 print(f"     - {a}")
             print()
+
+    # -----------------------------------------------------------------------
+    # 06 SUPPLY CHAIN & NETWORK EXPOSURE
+    # -----------------------------------------------------------------------
+    def _sanitize(s: str) -> str:
+        return (
+            s.replace("\u00d7", "x")   # multiplication sign
+             .replace("\u2013", "-")   # en-dash
+             .replace("\u2014", "-")   # em-dash
+             .replace("\u2011", "-")   # non-breaking hyphen
+             .replace("\u2018", "'")   # left single quote
+             .replace("\u2019", "'")   # right single quote
+             .replace("\u201c", '"')   # left double quote
+             .replace("\u201d", '"')   # right double quote
+             .replace("\u2026", "...") # ellipsis
+        )
+
+    sc_data = result.get("supply_chain_analysis")
+    if sc_data is not None:
+        print("06 SUPPLY CHAIN & NETWORK EXPOSURE")
+        print(div_light)
+        try:
+            from agents.supply_chain_agent import SupplyChainAgent
+            sc_report = SupplyChainAgent.format_report(sc_data)
+            for line in sc_report.splitlines():
+                print("  " + _sanitize(line))
+        except Exception as _e:
+            print(f"  [Supply chain report unavailable: {_e}]")
+        print()
+
+    # -----------------------------------------------------------------------
+    # 07 AGRICULTURAL VULNERABILITY ANALYSIS
+    # -----------------------------------------------------------------------
+    va_data = result.get("vulnerability_analysis")
+    if va_data is not None:
+        print("07 AGRICULTURAL VULNERABILITY ANALYSIS")
+        print(div_light)
+        try:
+            from agents.vulnerability_agent import VulnerabilityAgent
+            va_report = VulnerabilityAgent.format_report(va_data)
+            for line in va_report.splitlines():
+                print("  " + _sanitize(line))
+        except Exception as _e:
+            print(f"  [Vulnerability report unavailable: {_e}]")
+        print()
+
     print(div_heavy + "\n")
 
 
