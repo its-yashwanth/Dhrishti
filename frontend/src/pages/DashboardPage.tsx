@@ -7,7 +7,7 @@ import { KpiCard } from '../components/common/KpiCard';
 import { Badge } from '../components/common/Badge';
 import { ProvenanceTag } from '../components/common/ProvenanceTag';
 import { DrishtiAPI, PipelineStageEvent } from '../services/api';
-import { DrishtiAnalysisResult, StructuredEvent, TradeFlow } from '../types/drishti';
+import { DrishtiAnalysisResult, StructuredEvent, TradeFlow, TradeShareStatus } from '../types/drishti';
 import {
   Sparkles,
   ArrowRight,
@@ -18,7 +18,10 @@ import {
   ShieldCheck,
   FileText,
   AlertTriangle,
-  Info
+  Info,
+  GitCommitHorizontal,
+  Sliders,
+  Database
 } from 'lucide-react';
 
 interface OutletContextType {
@@ -36,26 +39,30 @@ export const DashboardPage: React.FC = () => {
   const [currentStage, setCurrentStage] = useState<PipelineStageEvent['stage']>();
   const [stagesStatus, setStagesStatus] = useState<Record<string, 'pending' | 'active' | 'completed' | 'error'>>({});
 
-  // Trigger natural language extraction
+  // Step 1: Trigger natural language extraction via Event Intelligence
   const handleAnalyzeQuery = async (query: string) => {
     setIsExtracting(true);
     try {
       const extracted = await DrishtiAPI.extractEvent(query);
       setExtractedEvent(extracted);
     } catch {
-      // Ignore
+      // Graceful fallback
     } finally {
       setIsExtracting(false);
     }
   };
 
-  // Execute full cascade after review
+  // Step 2: Execute full econometric cascade after review
   const handleConfirmScenario = async (params: {
     commodity: string;
     partner_country: string;
     trade_type: TradeFlow;
     shock_intensity: number;
+    shock_intensity_source: string;
     trade_share: number;
+    trade_share_source: string;
+    trade_share_status: TradeShareStatus;
+    scenario_multiplier: number;
     hs4: number;
   }) => {
     setExtractedEvent(null);
@@ -65,7 +72,7 @@ export const DashboardPage: React.FC = () => {
     try {
       await DrishtiAPI.runFullAnalysis(
         {
-          query: extractedEvent?.summary || 'Geopolitical trade shock',
+          query: extractedEvent?.summary || `Geopolitical trade shock involving ${params.commodity} to ${params.partner_country}`,
           ...params
         },
         (progress) => {
@@ -84,16 +91,43 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
+  // Open parameter adjustment for active scenario directly on Dashboard
+  const handleAdjustActiveParameters = () => {
+    if (currentScenario?.scenario_data) {
+      const sd = currentScenario.scenario_data;
+      setExtractedEvent({
+        country: sd.event_country,
+        commodity: sd.commodity,
+        hs4: sd.hs4,
+        trade_type: sd.trade_type,
+        event_type: sd.event_type,
+        shock_direction: sd.shock_direction,
+        approximate_timing: 'Active Context',
+        summary: sd.description || `Active scenario: ${sd.commodity} ${sd.trade_type} to ${sd.event_country}`,
+        confidence: sd.confidence,
+        shock_intensity: sd.shock_intensity,
+        shock_intensity_source: sd.shock_intensity_source || 'GDELT DOC 2.0 / MCP News Event Evidence',
+        trade_share: sd.trade_share,
+        trade_share_source: sd.trade_share_source || 'Historical Trade Database (UN Comtrade / DGFT)',
+        trade_share_status: sd.trade_share_status || 'CONFIRMED_HISTORICAL',
+        scenario_multiplier: sd.scenario_multiplier || 1.0,
+        effective_shock: sd.effective_shock || 0.075,
+        effective_shock_formula: sd.effective_shock_formula
+      });
+    }
+  };
+
   const scData = currentScenario?.supply_chain_analysis?.supply_chain_analysis;
   const vuData = currentScenario?.vulnerability_analysis?.vulnerability_analysis;
   const mlPreds = currentScenario?.ml_predictions;
+  const sData = currentScenario?.scenario_data;
 
   return (
     <div className="space-y-6">
       {/* 1. Large Natural Language Input Hero */}
       <EventInputHero onAnalyze={handleAnalyzeQuery} isLoading={isExtracting} />
 
-      {/* 2. Scenario Review Confirmation Panel */}
+      {/* 2. Detected Event Review Confirmation Panel (Two-Step Ingestion) */}
       {extractedEvent && (
         <ScenarioReviewModal
           event={extractedEvent}
@@ -111,38 +145,61 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {/* 4. Active Scenario Executive Banner */}
-      <div className="card-terminal rounded-xl p-5 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="card-terminal rounded-xl p-5 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-[#0b1324] via-[#070b14] to-[#070b14]">
         <div>
           <div className="flex items-center space-x-2 text-xs font-mono text-cyan-400 mb-1">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
             <span>ACTIVE DECISION CONTEXT</span>
             <span className="text-slate-600">|</span>
-            <span className="text-slate-400">HS4: {currentScenario?.scenario_data?.hs4 || 1001}</span>
+            <span className="text-slate-300 font-bold">HS4: {sData?.hs4 || 1001}</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-400">{sData?.event_country || 'RUSSIA'}</span>
+            <span className="text-slate-600">|</span>
+            <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+              sData?.trade_share_status === 'CONFIRMED_HISTORICAL'
+                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                : 'bg-amber-950 text-amber-300 border border-amber-800'
+            }`}>
+              {sData?.trade_share_status === 'CONFIRMED_HISTORICAL' ? 'HISTORICAL BASELINE' : 'SCENARIO ASSUMPTION'}
+            </span>
           </div>
+
           <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
             <span>{currentScenario?.scenario_name || 'Wheat Export Disruption (India → Russia)'}</span>
             <Badge
-              label={currentScenario?.scenario_data?.trade_type || 'Export'}
+              label={sData?.trade_type || 'Export'}
               variant="PURPLE"
               size="sm"
             />
           </h2>
+
           <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
-            {currentScenario?.scenario_data?.description ||
-              'Bilateral export restriction on Indian wheat with 1.5x shock intensity across 5.0% trade share baseline.'}
+            {sData?.description ||
+              'Bilateral export restriction on Indian wheat with shock intensity across trade share baseline.'}
           </p>
+
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] font-mono text-slate-400">
+            <span>Effective Shock: <strong className="text-cyan-300">{sData?.effective_shock?.toFixed(4) || '0.0750'}</strong></span>
+            <span className="text-slate-600">•</span>
+            <span>GDELT Intensity: <strong className="text-purple-300">{sData?.shock_intensity?.toFixed(2) || '1.50'}x</strong></span>
+            <span className="text-slate-600">•</span>
+            <span>Trade Share: <strong className="text-slate-200">{sData?.trade_share?.toFixed(1) || '5.0'}%</strong></span>
+            <span className="text-slate-600">•</span>
+            <span>Multiplier: <strong className="text-sky-300">{sData?.scenario_multiplier?.toFixed(1) || '1.0'}x</strong></span>
+          </div>
         </div>
 
         <div className="flex items-center space-x-3 shrink-0">
           <button
-            onClick={() => navigate('/event-analysis')}
-            className="px-3.5 py-1.5 rounded bg-slate-900 border border-slate-700 hover:border-cyan-600 text-xs font-mono text-slate-300 hover:text-white transition-colors cursor-pointer"
+            onClick={handleAdjustActiveParameters}
+            className="px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500 text-xs font-mono text-slate-200 hover:text-cyan-300 transition-colors flex items-center space-x-1.5 cursor-pointer"
           >
-            Adjust Parameters
+            <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Adjust Parameters</span>
           </button>
           <button
             onClick={() => navigate('/report')}
-            className="px-4 py-1.5 rounded bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-mono text-xs font-semibold shadow-glow-cyan flex items-center space-x-1.5 transition-all cursor-pointer"
+            className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-mono text-xs font-semibold shadow-glow-cyan flex items-center space-x-1.5 transition-all cursor-pointer"
           >
             <FileText className="w-3.5 h-3.5" />
             <span>View Full Report</span>
@@ -155,11 +212,11 @@ export const DashboardPage: React.FC = () => {
         {/* Trade Impact (Model A) */}
         <KpiCard
           title="Trade Flow Return"
-          value={mlPreds?.trade?.Trade_Return_1M_Pred ? `${mlPreds.trade.Trade_Return_1M_Pred > 0 ? '+' : ''}${mlPreds.trade.Trade_Return_1M_Pred.toFixed(2)}%` : 'N/A'}
-          direction={mlPreds?.trade?.Trade_Return_1M_Pred && mlPreds.trade.Trade_Return_1M_Pred < 0 ? 'down' : 'up'}
-          severity="HIGH"
+          value={mlPreds?.trade?.Trade_Return_1M_Pred !== undefined ? `${mlPreds.trade.Trade_Return_1M_Pred > 0 ? '+' : ''}${mlPreds.trade.Trade_Return_1M_Pred.toFixed(2)}%` : 'N/A'}
+          direction={mlPreds?.trade?.Trade_Return_1M_Pred !== undefined && mlPreds.trade.Trade_Return_1M_Pred < 0 ? 'down' : 'up'}
+          severity={mlPreds?.trade?.Trade_Return_1M_Pred !== undefined && mlPreds.trade.Trade_Return_1M_Pred < -0.5 ? 'HIGH' : 'MODERATE'}
           modelBadge="Model A"
-          subtitle="Projected 1-Month Trade Return"
+          subtitle="1-Month Trade Return Pred"
           provenance="[ML INFERENCE]"
           accentColor="purple"
         />
@@ -167,11 +224,11 @@ export const DashboardPage: React.FC = () => {
         {/* Agricultural Production (Model B) */}
         <KpiCard
           title="National Production"
-          value={mlPreds?.agriculture?.Production_Growth_Pred ? `${mlPreds.agriculture.Production_Growth_Pred > 0 ? '+' : ''}${mlPreds.agriculture.Production_Growth_Pred.toFixed(2)}%` : 'N/A'}
-          direction={mlPreds?.agriculture?.Production_Growth_Pred && mlPreds.agriculture.Production_Growth_Pred < 0 ? 'down' : 'up'}
-          severity={mlPreds?.agriculture?.Production_Risk === 'High' ? 'HIGH' : 'MODERATE'}
+          value={mlPreds?.agriculture?.Production_Growth_Pred !== undefined ? `${mlPreds.agriculture.Production_Growth_Pred > 0 ? '+' : ''}${mlPreds.agriculture.Production_Growth_Pred.toFixed(2)}%` : 'N/A'}
+          direction={mlPreds?.agriculture?.Production_Growth_Pred !== undefined && mlPreds.agriculture.Production_Growth_Pred < 0 ? 'down' : 'up'}
+          severity={mlPreds?.agriculture?.Production_Risk === 'High' ? 'HIGH' : mlPreds?.agriculture?.Production_Risk === 'Medium' ? 'MODERATE' : 'LOW'}
           modelBadge="Model B"
-          subtitle={`National Growth | Risk: ${mlPreds?.agriculture?.Production_Risk || 'Medium'}`}
+          subtitle={`Prod Deflection | Risk: ${mlPreds?.agriculture?.Production_Risk || 'Low'}`}
           provenance="[ML INFERENCE]"
           accentColor="purple"
         />
@@ -179,23 +236,25 @@ export const DashboardPage: React.FC = () => {
         {/* Price Impact (Model C) */}
         <KpiCard
           title="Wholesale Price"
-          value={mlPreds?.price?.Price_Return_1M_Pred ? `${mlPreds.price.Price_Return_1M_Pred > 0 ? '+' : ''}${mlPreds.price.Price_Return_1M_Pred.toFixed(2)}%` : 'N/A'}
-          direction={mlPreds?.price?.Price_Return_1M_Pred && mlPreds.price.Price_Return_1M_Pred < 0 ? 'down' : 'up'}
-          severity="MODERATE"
+          value={mlPreds?.price?.Price_Return_1M_Pred !== null && mlPreds?.price?.Price_Return_1M_Pred !== undefined
+            ? `${mlPreds.price.Price_Return_1M_Pred > 0 ? '+' : ''}${mlPreds.price.Price_Return_1M_Pred.toFixed(2)}%`
+            : '0.00% (Neutral)'}
+          direction={mlPreds?.price?.Price_Return_1M_Pred && mlPreds.price.Price_Return_1M_Pred > 0 ? 'up' : 'neutral'}
+          severity={mlPreds?.price?.Price_Return_1M_Pred && mlPreds.price.Price_Return_1M_Pred > 1.0 ? 'HIGH' : 'LOW'}
           modelBadge="Model C"
-          subtitle="Domestic Wholesale Deflection"
-          provenance="[ML INFERENCE]"
+          subtitle={mlPreds?.price?.Price_Return_1M_Pred !== null && mlPreds?.price?.Price_Return_1M_Pred !== undefined ? 'Wholesale Price Deflection' : 'No wholesale spike'}
+          provenance={mlPreds?.price?.Price_Return_1M_Pred !== null ? '[ML INFERENCE]' : '[BUFFER EQUILIBRIUM]'}
           accentColor="purple"
         />
 
         {/* Economic GVA (Model D) */}
         <KpiCard
           title="Agri GVA Growth"
-          value={mlPreds?.economy?.Agri_GVA_Growth_Pred ? `${mlPreds.economy.Agri_GVA_Growth_Pred > 0 ? '+' : ''}${mlPreds.economy.Agri_GVA_Growth_Pred.toFixed(2)} pp` : 'N/A'}
+          value={mlPreds?.economy?.Agri_GVA_Growth_Pred !== undefined ? `${mlPreds.economy.Agri_GVA_Growth_Pred > 0 ? '+' : ''}${mlPreds.economy.Agri_GVA_Growth_Pred.toFixed(2)}%` : 'N/A'}
           direction={mlPreds?.economy?.Agri_GVA_Growth_Pred && mlPreds.economy.Agri_GVA_Growth_Pred < 0 ? 'down' : 'neutral'}
           severity="LOW"
           modelBadge="Model D"
-          subtitle={`Food Inflation: ${mlPreds?.economy?.Inflation_Change_Pred ? `${mlPreds.economy.Inflation_Change_Pred.toFixed(2)} pp` : 'N/A'}`}
+          subtitle={`Inflation: ${mlPreds?.economy?.Inflation_Change_Pred !== undefined ? `${mlPreds.economy.Inflation_Change_Pred > 0 ? '+' : ''}${mlPreds.economy.Inflation_Change_Pred.toFixed(2)} pp` : 'N/A'}`}
           provenance="[ML INFERENCE]"
           accentColor="purple"
         />
@@ -206,22 +265,22 @@ export const DashboardPage: React.FC = () => {
           value={vuData?.regional_scores_summary?.max_ravs?.toFixed(3) || '0.841'}
           severity="HIGH"
           modelBadge="RAVS Index"
-          subtitle={`Mean RAVS: ${vuData?.regional_scores_summary?.mean_ravs?.toFixed(3) || '0.412'} (320 Dists)`}
+          subtitle={`Mean RAVS: ${vuData?.regional_scores_summary?.mean_ravs?.toFixed(3) || '0.412'} (${vuData?.top_vulnerable_regions?.length || 5} Dists)`}
           provenance="[AGRICULTURE DATA]"
           accentColor="amber"
-          footerNote="Top: Firozpur, PB"
+          footerNote={vuData?.top_vulnerable_regions?.[0] ? `${vuData.top_vulnerable_regions[0].district}, ${vuData.top_vulnerable_regions[0].state}` : 'Top Exposed'}
         />
 
         {/* Supply Chain Exposure */}
         <KpiCard
           title="Effective Shock"
-          value={scData?.scenario_exposure?.effective_shock?.toFixed(4) || '0.0750'}
+          value={sData?.effective_shock?.toFixed(4) || '0.0750'}
           severity="HIGH"
           modelBadge="Graph Engine"
-          subtitle={`Bottlenecks: ${scData?.critical_ports?.length || 2} Ports Flagged`}
+          subtitle={`Critical: ${scData?.critical_ports?.length || 3} Ports Flagged`}
           provenance="[GRAPH-DERIVED]"
           accentColor="cyan"
-          footerNote="Kandla / JNPA"
+          footerNote={scData?.critical_ports?.[0]?.port?.split(' ')[0] || 'Kandla'}
         />
       </div>
 
@@ -239,22 +298,47 @@ export const DashboardPage: React.FC = () => {
 
         <p className="text-xs text-slate-200 leading-relaxed font-sans">
           {currentScenario?.economic_interpretation ||
-            'Econometric forecasts associate the scenario with an immediate export volume contraction, generating localized surplus accumulation in northern primary mandis. Supply chain network exposure highlights Deendayal Port Authority as the primary gateway bottleneck.'}
+            'Econometric forecasts associate the scenario with an immediate export volume contraction, generating localized surplus accumulation in northern primary mandis. Supply chain network exposure highlights gateway port bottlenecks.'}
         </p>
 
         <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
           <span className="flex items-center space-x-1.5 text-slate-400 font-mono">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-            <span>Strict non-causal disclaimer: Model forecasts represent statistical correlations, not deterministic proof.</span>
+            <span>Strict non-causal disclaimer: Model forecasts represent statistical associations, not deterministic proof.</span>
           </span>
           <span className="font-mono text-purple-400">
-            {currentScenario?.llm_usage?.economic_interpretation || 'Gemini 2.5 Flash'}
+            {currentScenario?.llm_usage?.economic_interpretation || 'Gemini 2.5 Flash / Groq LLAMA-3 70B'}
           </span>
         </div>
       </div>
 
       {/* 7. Deep-Dive Domain Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Impact Cascade Card */}
+        <div
+          onClick={() => navigate('/cascade')}
+          className="card-terminal rounded-xl p-5 border border-slate-800 hover:border-purple-500/60 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2.5 rounded-lg bg-purple-950/80 border border-purple-800 text-purple-400 group-hover:scale-105 transition-transform">
+                <GitCommitHorizontal className="w-5 h-5" />
+              </div>
+              <Badge label="M-A → D" variant="PURPLE" size="sm" />
+            </div>
+            <h3 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors">
+              Impact Cascade
+            </h3>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Hierarchical econometric models transfer shock from bilateral trade return to national production, wholesale price, and GDP GVA.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-purple-400 font-mono font-medium">
+            <span>Explore Cascade</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+
         {/* Supply Chain Card */}
         <div
           onClick={() => navigate('/supply-chain')}
@@ -296,7 +380,7 @@ export const DashboardPage: React.FC = () => {
               Regional Agricultural Vulnerability
             </h3>
             <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-              District-level spatial index (RAVS) across 320 producing zones capturing production share, yield variability, and crop concentration.
+              District-level spatial index (RAVS) across producing zones capturing production share, yield variability, and crop concentration.
             </p>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-amber-400 font-mono font-medium">

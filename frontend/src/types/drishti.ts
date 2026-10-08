@@ -7,6 +7,8 @@ export type TradeFlow = 'Export' | 'Import';
 export type ShockDirection = 'supply_contraction' | 'supply_shock' | 'demand_contraction' | 'demand_shock' | 'trade_restriction' | 'logistics_disruption';
 export type SeverityLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'VERY HIGH' | 'CRITICAL' | 'INFO';
 
+export type TradeShareStatus = 'CONFIRMED_HISTORICAL' | 'UNAVAILABLE' | 'SCENARIO_ASSUMED';
+
 export interface StructuredEvent {
   country: string;
   commodity: string;
@@ -18,7 +20,13 @@ export interface StructuredEvent {
   summary: string;
   confidence: 'high' | 'medium' | 'low';
   shock_intensity?: number;
+  shock_intensity_source?: string;
   trade_share?: number;
+  trade_share_source?: string;
+  trade_share_status?: TradeShareStatus;
+  scenario_multiplier?: number;
+  effective_shock?: number;
+  effective_shock_formula?: string;
   extracted_from?: string;
 }
 
@@ -225,7 +233,13 @@ export interface DrishtiAnalysisResult {
     event_type: string;
     shock_direction: ShockDirection;
     shock_intensity: number;
+    shock_intensity_source?: string;
     trade_share: number;
+    trade_share_source?: string;
+    trade_share_status?: TradeShareStatus;
+    scenario_multiplier?: number;
+    effective_shock?: number;
+    effective_shock_formula?: string;
     description: string;
     confidence: 'high' | 'medium' | 'low';
     event_date: string;
@@ -262,6 +276,10 @@ export interface ScenarioInputParams {
   commodity?: string;
   trade_type?: TradeFlow;
   shock_intensity?: number;
+  shock_intensity_source?: string;
   trade_share?: number;
+  trade_share_source?: string;
+  trade_share_status?: TradeShareStatus;
+  scenario_multiplier?: number;
   hs4?: number;
 }

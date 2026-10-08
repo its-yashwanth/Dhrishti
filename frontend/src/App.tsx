@@ -18,7 +18,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<DashboardPage />} />
-          <Route path="event-analysis" element={<EventAnalysisPage />} />
+          <Route path="event-analysis" element={<Navigate to="/" replace />} />
           <Route path="cascade" element={<ImpactCascadePage />} />
           <Route path="supply-chain" element={<SupplyChainPage />} />
           <Route path="vulnerability" element={<VulnerabilityPage />} />

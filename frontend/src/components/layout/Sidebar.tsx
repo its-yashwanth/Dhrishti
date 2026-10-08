@@ -24,7 +24,6 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Event Analysis', path: '/event-analysis', icon: Sparkles, badge: 'NL Ingest', badgeColor: 'bg-cyan-950 text-cyan-400 border-cyan-800' },
   { name: 'Impact Cascade', path: '/cascade', icon: GitCommitHorizontal, badge: 'M-A → D', badgeColor: 'bg-purple-950 text-purple-400 border-purple-800' },
   { name: 'Supply Chain', path: '/supply-chain', icon: Globe2, badge: '3D Globe', badgeColor: 'bg-sky-950 text-sky-400 border-sky-800' },
   { name: 'Vulnerability', path: '/vulnerability', icon: MapPin, badge: 'RAVS', badgeColor: 'bg-amber-950 text-amber-400 border-amber-800' },

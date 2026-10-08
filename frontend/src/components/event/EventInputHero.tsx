@@ -18,7 +18,6 @@ export const EventInputHero: React.FC<EventInputHeroProps> = ({ onAnalyze, isLoa
 
   const handlePresetSelect = (presetQuery: string) => {
     setQuery(presetQuery);
-    onAnalyze(presetQuery);
   };
 
   return (
@@ -76,12 +75,11 @@ export const EventInputHero: React.FC<EventInputHeroProps> = ({ onAnalyze, isLoa
             {isLoading ? (
               <>
                 <Sparkles className="w-3.5 h-3.5 animate-spin" />
-                <span>Extracting...</span>
+                <span>Extracting Event...</span>
               </>
             ) : (
               <>
-                <span>Analyze Shock</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span>Analyze Event →</span>
               </>
             )}
           </button>

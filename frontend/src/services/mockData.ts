@@ -5,21 +5,27 @@ export const DEFAULT_STRUCTURED_EVENT: StructuredEvent = {
   commodity: 'Wheat',
   hs4: 1001,
   trade_type: 'Export',
-  event_type: 'Trade Restriction / Export Ban',
+  event_type: 'Trade Restriction / Import Ban',
   shock_direction: 'supply_contraction',
-  approximate_timing: 'Q2 2024 / Immediate',
-  summary: 'Russia suspended import permissions for Indian wheat consignments following sanitary certifications and regional trade recalibrations, triggering port backlog and immediate export contraction.',
+  approximate_timing: 'Immediate / Active Scenario',
+  summary: 'Russia stopped importing wheat from India amid sanitary and bilateral trade disputes, triggering gateway port diversion and domestic mandi surplus accumulation.',
   confidence: 'high',
   shock_intensity: 1.5,
+  shock_intensity_source: 'GDELT DOC 2.0 / MCP News Event Evidence',
   trade_share: 5.0,
-  extracted_from: 'Natural language analysis cross-referenced with GDELT DOC 2.0 and UN Comtrade baseline'
+  trade_share_source: 'Historical Trade Database (UN Comtrade / DGFT)',
+  trade_share_status: 'CONFIRMED_HISTORICAL',
+  scenario_multiplier: 1.0,
+  effective_shock: 0.075,
+  effective_shock_formula: '(1.50 × 1.0 × 5.0%) / 100 = 0.0750',
+  extracted_from: 'Event Intelligence Agent extraction cross-referenced with GDELT DOC 2.0 and canonical HS4 mapping'
 };
 
 export const MOCK_ANALYSIS_RESULT: DrishtiAnalysisResult = {
   scenario_name: 'Wheat Export Disruption (India -> Russia)',
   timestamp: new Date().toISOString(),
   scenario_data: {
-    query: 'Russia stopped importing wheat from India',
+    query: 'Russia stops importing wheat from India',
     event_country: 'RUSSIA',
     commodity: 'Wheat',
     hs4: 1001,
@@ -27,17 +33,23 @@ export const MOCK_ANALYSIS_RESULT: DrishtiAnalysisResult = {
     event_type: 'trade_restriction',
     shock_direction: 'supply_contraction',
     shock_intensity: 1.5,
+    shock_intensity_source: 'GDELT DOC 2.0 / MCP News Event Evidence',
     trade_share: 5.0,
-    description: 'Bilateral export restriction on Indian wheat to Russia with 1.5x shock multiplier across 5.0% historical bilateral share baseline.',
+    trade_share_source: 'Historical Trade Database (UN Comtrade / DGFT)',
+    trade_share_status: 'CONFIRMED_HISTORICAL',
+    scenario_multiplier: 1.0,
+    effective_shock: 0.075,
+    effective_shock_formula: '(1.50 × 1.0 × 5.0%) / 100 = 0.0750',
+    description: 'Bilateral export restriction on Indian wheat to Russia with 1.50x GDELT shock intensity across 5.0% historical bilateral share baseline.',
     confidence: 'high',
     event_date: '2024-06-15'
   },
   ml_predictions: {
     trade: {
-      Trade_Return_1M_Pred: -4.82,
+      Trade_Return_1M_Pred: 0.08,
       status: 'AVAILABLE',
-      model_name: 'Model A — Trade Return RF/Ridge Estimator',
-      provenance: '[ML INFERENCE: XGBoost + Random Forest Ensemble]',
+      model_name: 'Model A — Trade Return Ridge/Ensemble Estimator',
+      provenance: '[ML INFERENCE: Trained Model A Artifact]',
       metrics: {
         r2: 0.68,
         mae: 1.14
@@ -51,25 +63,25 @@ export const MOCK_ANALYSIS_RESULT: DrishtiAnalysisResult = {
       }
     },
     agriculture: {
-      Production_Growth_Pred: -1.35,
-      Production_Risk: 'Medium',
+      Production_Growth_Pred: -0.72,
+      Production_Risk: 'Low',
       status: 'AVAILABLE',
       model_name: 'Model B — Agricultural Production Gradient Booster',
       provenance: '[ML INFERENCE: LightGBM Regressor]'
     },
     price: {
-      Price_Return_1M_Pred: -2.18,
-      status: 'AVAILABLE',
-      model_name: 'Model C — Domestic Wholesale Price Vector Autoregressor',
-      provenance: '[ML INFERENCE: Multi-lag Ridge Estimator]',
-      note: 'Negative price return reflects domestic supply diversion due to trapped export volumes in major northern mandis.'
+      Price_Return_1M_Pred: null,
+      status: 'UNAVAILABLE',
+      model_name: 'Model C — Wholesale Price Deflection Estimator',
+      provenance: '[DETERMINISTIC: Historical Lagged Elasticity]',
+      note: 'Export-side bilateral shock with domestic buffer inventory exhibits no significant wholesale price deflection.'
     },
     economy: {
-      Agri_GVA_Growth_Pred: -0.41,
-      Inflation_Change_Pred: -0.19,
+      Agri_GVA_Growth_Pred: 4.64,
+      Inflation_Change_Pred: -1.71,
       status: 'AVAILABLE',
-      model_name: 'Model D — Macroeconomic GVA & Inflation Transfer Model',
-      provenance: '[ML INFERENCE: Econometric Elasticity Matrix]'
+      model_name: 'Model D — Macroeconomic Transfer System',
+      provenance: '[ML INFERENCE: Elasticity Transfer Matrix]'
     }
   },
   economic_interpretation: 'Econometric forecasts indicate an associated 1-month export flow contraction of -4.82% for Wheat to Russia. Domestic mandis in surplus northern zones are projected to face short-run accumulation pressure (-2.18% domestic price deflection). National agricultural production shows a projected growth deflection of -1.35% with moderate vulnerability. Macro agricultural GVA growth is associated with a -0.41 percentage point dampening, alongside an estimated -0.19 pp easing of immediate food inflation pressures due to localized cereal availability.',
@@ -951,33 +963,40 @@ export const MOCK_ANALYSIS_RESULT: DrishtiAnalysisResult = {
 
 export const PRESET_SCENARIOS = [
   {
-    title: 'Russia stops wheat imports from India',
-    query: 'Russia stopped importing wheat from India amid sanitary and trade dispute',
+    title: 'Russia stops importing wheat from India',
+    query: 'Russia stops importing wheat from India',
     commodity: 'Wheat',
     country: 'RUSSIA',
     trade_type: 'Export' as const,
+    hs4: 1001,
     shock_intensity: 1.5,
     trade_share: 5.0,
-    badge: 'Canonical Case'
+    trade_share_status: 'CONFIRMED_HISTORICAL' as const,
+    badge: 'Bilateral Restriction'
   },
   {
-    title: 'Black Sea grain transit disruption',
-    query: 'Black Sea naval escalation disrupts grain shipping corridors and ocean bulk transport',
+    title: 'Russia restricts wheat imports from India due to Black Sea shipping disruption',
+    query: 'Russia restricts wheat imports from India due to Black Sea shipping disruption',
     commodity: 'Wheat',
-    country: 'UKRAINE',
-    trade_type: 'Import' as const,
-    shock_intensity: 2.0,
-    trade_share: 8.2,
-    badge: 'Logistics Shock'
+    country: 'RUSSIA',
+    trade_type: 'Export' as const,
+    hs4: 1001,
+    shock_intensity: 2.2,
+    trade_share: 5.0,
+    trade_share_status: 'CONFIRMED_HISTORICAL' as const,
+    badge: 'Shipping Corridor'
   },
   {
-    title: 'Bangladesh restricts cotton import quotas',
-    query: 'Bangladesh restricts raw cotton import quotas and overland rail transit from India',
+    title: 'Bangladesh restricts cotton imports from India',
+    query: 'Bangladesh restricts cotton imports from India',
     commodity: 'Cotton',
     country: 'BANGLADESH',
     trade_type: 'Export' as const,
+    hs4: 5201,
     shock_intensity: 1.2,
     trade_share: 14.5,
-    badge: 'Regional Exposure'
+    trade_share_status: 'UNAVAILABLE' as const,
+    badge: 'Regional Quota'
   }
 ];
+

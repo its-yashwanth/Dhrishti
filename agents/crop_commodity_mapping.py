@@ -128,6 +128,7 @@ HS4_TO_COMMODITY: Dict[int, str] = {
     1205: "rapeseed",
     1207: "sesamum",
     909:  "coriander",
+    5201: "cotton",
 }
 
 

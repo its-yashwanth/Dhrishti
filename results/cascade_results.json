@@ -98,7 +98,7 @@
         "Natural_Disaster_Trade_Exposure_USD": 0.0
       },
       "trade": {
-        "Trade_Return_1M_Pred": -0.08621058770839445,
+        "Trade_Return_1M_Pred": 0.041435204446315765,
         "status": "COMPUTED"
       },
       "agriculture": {
@@ -121,7 +121,7 @@
         {
           "stage": "trade",
           "key": "Trade_Return_1M_Pred",
-          "value": -0.08621058770839445
+          "value": 0.041435204446315765
         },
         {
           "stage": "agriculture",
@@ -256,7 +256,7 @@
         "Natural_Disaster_Trade_Exposure_USD": 0.0
       },
       "trade": {
-        "Trade_Return_1M_Pred": 0.03539105253050834,
+        "Trade_Return_1M_Pred": -0.1418371945619583,
         "status": "COMPUTED"
       },
       "agriculture": {
@@ -279,7 +279,7 @@
         {
           "stage": "trade",
           "key": "Trade_Return_1M_Pred",
-          "value": 0.03539105253050834
+          "value": -0.1418371945619583
         },
         {
           "stage": "agriculture",
@@ -414,7 +414,7 @@
         "Natural_Disaster_Trade_Exposure_USD": 25612.605
       },
       "trade": {
-        "Trade_Return_1M_Pred": -0.09307001840269265,
+        "Trade_Return_1M_Pred": 0.09629884362220764,
         "status": "COMPUTED"
       },
       "agriculture": {
@@ -437,7 +437,7 @@
         {
           "stage": "trade",
           "key": "Trade_Return_1M_Pred",
-          "value": -0.09307001840269265
+          "value": 0.09629884362220764
         },
         {
           "stage": "agriculture",
@@ -572,7 +572,7 @@
         "Natural_Disaster_Trade_Exposure_USD": 0.0
       },
       "trade": {
-        "Trade_Return_1M_Pred": 0.15190985206091537,
+        "Trade_Return_1M_Pred": 0.3968975841999054,
         "status": "COMPUTED"
       },
       "agriculture": {
@@ -595,7 +595,7 @@
         {
           "stage": "trade",
           "key": "Trade_Return_1M_Pred",
-          "value": 0.15190985206091537
+          "value": 0.3968975841999054
         },
         {
           "stage": "agriculture",
@@ -730,7 +730,7 @@
         "Natural_Disaster_Trade_Exposure_USD": 82594.66
       },
       "trade": {
-        "Trade_Return_1M_Pred": 0.027249153739966562,
+        "Trade_Return_1M_Pred": 0.15334130823612213,
         "status": "COMPUTED"
       },
       "agriculture": {
@@ -753,7 +753,7 @@
         {
           "stage": "trade",
           "key": "Trade_Return_1M_Pred",
-          "value": 0.027249153739966562
+          "value": 0.15334130823612213
         },
         {
           "stage": "agriculture",

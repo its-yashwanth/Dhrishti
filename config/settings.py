@@ -86,4 +86,5 @@ COMMODITY_TO_HS4 = {
     "ginger": 910,
     "chilli": 904,
     "chillies": 904,
+    "cotton": 5201,
 }
