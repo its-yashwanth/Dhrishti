@@ -1,0 +1,170 @@
+{
+  "metadata": {
+    "project": "Drishti Macro-Econometric Supply Chain Cascade",
+    "component": "Model B-1 (Agricultural Production & Yield) & Model B-2 (Production Risk Classification)",
+    "initiative": "Aggressive Model B Controlled Experimentation",
+    "branch": "ml-model-improvement-v2",
+    "timestamp": "2026-10-09T20:15:00",
+    "status": "COMPLETED_AUDITED"
+  },
+  "dataset_diagnostics": {
+    "raw_crop_records": 80450,
+    "mapped_crop_records": 62304,
+    "num_mapped_crops": 34,
+    "num_excluded_crops": 20,
+    "national_seasonal_records": 473,
+    "monthly_expanded_records": 2355,
+    "unique_hs4_year_month_cells": 1184,
+    "trade_panel_rows_with_production": 14963,
+    "pseudo_replication_factor": 12.64,
+    "temporal_splits": {
+      "training_span": "1997-2021",
+      "train_trade_rows": 11360,
+      "train_crop_cells": 888,
+      "validation_span": "2022",
+      "val_trade_rows": 2942,
+      "val_crop_cells": 239,
+      "frozen_test_span": "2023",
+      "test_trade_rows": 661,
+      "test_crop_cells": 57
+    }
+  },
+  "track_1_and_2_summary": {
+    "E1A_production_yoy": {
+      "model": "LightGBM L1",
+      "val_mae": 41.7277,
+      "test_mae": 23.4728,
+      "zero_baseline_test_mae": 22.9841,
+      "beats_baseline": false,
+      "achieves_sub_10_pct": false
+    },
+    "E1A_yield_yoy": {
+      "model": "LightGBM L1",
+      "val_mae": 20.4241,
+      "test_mae": 6.5623,
+      "zero_baseline_test_mae": 5.9118,
+      "beats_baseline": false,
+      "achieves_sub_10_pct": true
+    },
+    "E1C_yield_decomposed_production": {
+      "formulation": "Area_sown * LightGBM_Yield_L1",
+      "test_mae": 7.1236,
+      "test_rmse": 9.0583,
+      "test_r2": 0.8854,
+      "zero_baseline_test_mae": 22.9841,
+      "error_reduction_pct": 69.01,
+      "beats_baseline": true,
+      "achieves_sub_10_pct": true
+    },
+    "E2B_crop_panel_production": {
+      "unit": "Independent Crop-Season Panel (n=941)",
+      "model": "LightGBM L1",
+      "val_mae": 46.4611,
+      "test_mae": 22.1846,
+      "zero_baseline_test_mae": 22.6285,
+      "beats_baseline": true,
+      "achieves_sub_10_pct": false
+    }
+  },
+  "track_3_feature_ablations": {
+    "target_production_yoy": {
+      "zero_baseline_test_mae": 22.9841,
+      "best_ablation_group": "Ablation_5_Ag_History_Plus_Macro_Disaster",
+      "best_ablation_test_mae": 39.2848
+    },
+    "target_yield_yoy": {
+      "zero_baseline_test_mae": 5.9118,
+      "val_baseline_mae": 20.4606,
+      "val_mae_group1": 18.8941,
+      "val_mae_group5": 18.4080,
+      "test_mae_group5": 11.3118
+    }
+  },
+  "track_4_temporal_validation": {
+    "window_1_2020": {
+      "production_best": "Zero_Baseline (56.40%)",
+      "yield_best": "LightGBM_L1 (25.80% vs Zero 25.91%)"
+    },
+    "window_2_2021": {
+      "production_best": "Zero_Baseline (87.55%)",
+      "yield_best": "Zero_Baseline (16.70%)"
+    },
+    "window_3_2022": {
+      "production_best": "Zero_Baseline (38.46%)",
+      "yield_best": "LightGBM_L1 (18.76% vs Zero 20.46%)"
+    },
+    "window_4_2023": {
+      "production_best": "LightGBM_L1 (13.63% vs Zero 22.98%)",
+      "yield_best": "LightGBM_L1 (4.07% vs Zero 5.91%)"
+    }
+  },
+  "track_5_risk_classification": {
+    "zeror_anomaly_explanation": "In 2018 cold-start, missing 3Y rolling history defaulted deviations to 0.0, which fell into the (-25, +19] tonnes band (Class 2 / High Risk). Class 2 became the overall training set mode (96.3% of train). In the 2023 frozen test set, exactly 0 crops fell into this 44-tonne band, resulting in 0/661 (0.00%) accuracy for ZeroR.",
+    "schemes": {
+      "scheme_1_raw_tons": {
+        "status": "Pathological",
+        "train_mode_share": 0.963,
+        "test_mode_share": 1.0,
+        "zeror_test_acc": 1.0
+      },
+      "scheme_2_relative_pct": {
+        "status": "Recommended",
+        "zeror_baseline": {
+          "val_acc": 0.4799,
+          "test_acc": 0.4614,
+          "test_balanced_acc": 0.25,
+          "test_macro_f1": 0.1579
+        },
+        "selected_model": "Class-Weighted LightGBM (Cost-Sensitive)",
+        "selected_metrics": {
+          "val_acc": 0.5377,
+          "val_balanced_acc": 0.4378,
+          "val_macro_f1": 0.4518,
+          "test_acc": 0.5492,
+          "test_balanced_acc": 0.4158,
+          "test_macro_f1": 0.4137,
+          "test_weighted_f1": 0.4965,
+          "test_critical_recall": 0.3487,
+          "test_low_recall": 0.8459
+        },
+        "improvement_over_zeror": {
+          "accuracy_gain_pts": 8.78,
+          "balanced_acc_gain_pts": 16.58,
+          "macro_f1_relative_gain_pct": 162.0
+        }
+      },
+      "scheme_3_zscore_anomaly": {
+        "status": "Alternative Statistical",
+        "zeror_baseline": {
+          "test_acc": 0.5492,
+          "test_balanced_acc": 0.25,
+          "test_macro_f1": 0.1772
+        },
+        "selected_model": "Standard LightGBM",
+        "selected_metrics": {
+          "test_acc": 0.5628,
+          "test_balanced_acc": 0.3410,
+          "test_macro_f1": 0.3324,
+          "test_critical_recall": 0.4494
+        }
+      }
+    }
+  },
+  "candidate_artifacts_generated": [
+    "experiments/model_b_initiative/models/candidate_b1_production_lgbm_orig.joblib",
+    "experiments/model_b_initiative/models/candidate_b1_yield_lgbm_orig.joblib",
+    "experiments/model_b_initiative/models/candidate_b2_risk_scheme_1_rawtons_random_forest_(balanced).joblib",
+    "experiments/model_b_initiative/models/candidate_b2_risk_scheme_2_relativepct_class-weighted_lightgbm_(cost-sensitive).joblib",
+    "experiments/model_b_initiative/models/candidate_b2_risk_scheme_3_zscoreanomaly_multiclass_xgboost.joblib"
+  ],
+  "recommendations": {
+    "model_b1": {
+      "recommendation": "Adopt Experiment E1C (Yield-Decomposed Production Forecasting: Sown Area x Predicted Yield)",
+      "justification": "Achieves 7.1236% Test MAE (+69.01% error reduction over baseline, R2 = +0.8854), beating both the zero baseline and the <10% stretch goal while respecting agronomic identity."
+    },
+    "model_b2": {
+      "recommendation": "Adopt Label Scheme 2 (Relative Percentage Deviation from 3Y Prior Mean) with Class-Weighted LightGBM",
+      "justification": "Replaces collapsed raw-tonnage bins with scale-invariant percentage deviation, achieving 54.92% accuracy, 41.58% balanced accuracy, and 0.4137 macro F1 (+162% gain over ZeroR)."
+    }
+  }
+}

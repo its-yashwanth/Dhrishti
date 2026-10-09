@@ -1,0 +1,8 @@
+Experiment_ID,Target_Name,Prediction_Unit,Model,Val_MAE,Test_MAE,Test_RMSE,Test_R2,Zero_Baseline_Val_MAE,Zero_Baseline_Test_MAE,Mean_Baseline_Test_MAE,Beats_Baseline,Achieves_Sub_10_Pct,Converted_Orig_Scale_MAE
+E1A_Production,Production_YoY (Original %),"Trade-level rows (n=14,963)",LightGBM L1,41.7277,23.4728,27.7664,-0.0764,38.5876,22.9841,41.6264,False,False,
+E1A_Yield,Yield_YoY (Original %),"Trade-level rows (n=14,963)",LightGBM L1,20.4241,6.5623,8.5609,-0.1414,20.5304,5.9118,9.8702,False,True,
+E1B_Production_Log_Diff,Production_Log_Diff (Log % Differenced),"Trade-level rows (n=14,963)",LightGBM L1,50.8866,21.9422,27.4731,-0.072,45.2456,21.5319,21.8428,False,False,23.4379
+E1B_Yield_Log_Diff,Yield_Log_Diff (Log % Differenced),"Trade-level rows (n=14,963)",LightGBM L1,23.5479,6.5453,8.6994,-0.1538,23.7274,5.9487,7.3231,False,True,6.5204
+E1C_Yield_Decomposed_Production,Production Growth via Area x Yield Decomposition,"Trade-level rows (n=14,963)",Area_sown * LightGBM_Yield_L1,,7.1236,9.0583,0.8854,,22.9841,,True,True,
+E2B_CropPanel_Production,Production YoY (Independent Panel),Crop-Season cells (n=941),LightGBM L1,46.4611,22.1846,26.7373,0.0309,43.1254,22.6285,37.5987,True,False,
+E2B_CropPanel_Yield,Yield YoY (Independent Panel),Crop-Season cells (n=941),Ridge (alpha=100.0),19.7263,12.1995,15.0309,-1.6611,17.5838,6.6553,8.6641,False,False,

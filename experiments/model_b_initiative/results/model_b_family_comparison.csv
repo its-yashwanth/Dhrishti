@@ -1,0 +1,23 @@
+Target,Model_Family,Val_MAE,Test_MAE,Test_RMSE,Test_R2,Beats_Zero_Baseline
+Production_YoY,Zero-Growth Benchmark,38.4564,22.9841,28.9883,-0.1733,False
+Production_YoY,Historical Training Mean,57.7208,32.0429,38.2274,-1.0403,False
+Production_YoY,Crop-Specific Historical Mean,62.1014,31.3266,38.6344,-1.084,False
+Production_YoY,Ridge (alpha=100.0),86.8776,72.3851,108.8484,-15.5424,False
+Production_YoY,"ElasticNet (alpha=1.0, l1_ratio=0.1)",67.166,40.0327,48.2575,-2.2515,False
+Production_YoY,HuberRegressor (epsilon=1.35),56.7177,39.7542,93.0165,-11.0802,False
+Production_YoY,"RandomForest (depth=8, leaf=20)",58.6955,74.0618,155.9649,-32.9632,False
+Production_YoY,"ExtraTrees (depth=8, leaf=20)",51.4232,38.0524,65.4262,-4.9767,False
+Production_YoY,LightGBM L1 (reg_alpha=2.0),42.5633,49.5396,94.84,-11.5585,False
+Production_YoY,XGBoost L1 (reg_alpha=2.0),52.4528,47.1485,83.6017,-8.7585,False
+Production_YoY,HistGradientBoosting (l2=10.0),61.383,65.5698,112.8211,-16.772,False
+Yield_YoY,Zero-Growth Benchmark,20.4606,5.9118,8.0207,-0.0019,False
+Yield_YoY,Historical Training Mean,20.6631,8.4057,10.2416,-0.6336,False
+Yield_YoY,Crop-Specific Historical Mean,23.8955,9.7533,12.5849,-1.4667,False
+Yield_YoY,Ridge (alpha=100.0),21.516,14.3203,19.7941,-5.1021,False
+Yield_YoY,"ElasticNet (alpha=1.0, l1_ratio=0.1)",20.9336,10.6688,12.5615,-1.4575,False
+Yield_YoY,HuberRegressor (epsilon=1.35),18.8327,13.8619,53.2421,-43.1491,False
+Yield_YoY,"RandomForest (depth=8, leaf=20)",20.2243,21.4243,35.0206,-18.1011,False
+Yield_YoY,"ExtraTrees (depth=8, leaf=20)",19.5905,10.7167,16.4787,-3.2292,False
+Yield_YoY,LightGBM L1 (reg_alpha=2.0),18.7596,11.7286,18.7634,-4.4832,False
+Yield_YoY,XGBoost L1 (reg_alpha=2.0),22.571,20.8303,48.674,-35.8982,False
+Yield_YoY,HistGradientBoosting (l2=10.0),21.2709,17.4401,26.8927,-10.2636,False
