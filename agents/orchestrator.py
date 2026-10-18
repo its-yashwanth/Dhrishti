@@ -113,51 +113,12 @@ class DrishtiAgentOrchestrator:
         shock_intensity = scenario_data.get("shock_intensity")
         trade_share = scenario_data.get("trade_share")
 
-        # Step 1: Execute quantitative ML cascade with canonical feature engineering
-        print("  [*] [1/3] Executing canonical feature engineering and quantitative ML cascade...", flush=True)
-        cascade_output = run_drishti_ml_cascade(
-            country=event_country,
-            trade_type=trade_type,
-            hs4=hs4,
-            commodity=commodity,
-            event_date=event_date,
-            shock_intensity=shock_intensity,
-            trade_share=trade_share,
-            goldstein_score=goldstein,
-            avg_tone=avg_tone,
-            num_mentions=mentions,
-            event_root=event_root,
-            event_code=event_code,
-        )
+        import time as _pytime
+        stage_timings: Dict[str, float] = {}
+        stage_statuses: Dict[str, str] = {}
 
-        ml_predictions = cascade_output["predictions"]
-        prov_counts = cascade_output.get("provenance_counts", {})
-        prov_details = cascade_output.get("provenance_details", {})
-
-        # Step 2: Economic Interpretation
-        print("  [*] [2/3] Generating non-causal econometric interpretation...", flush=True)
-        flow_direction_desc = f"India's exports to {event_country}" if trade_type.lower() == "export" else f"India's imports from {event_country}"
-        interp_prompt = (
-            f"Synthesize the economic implications of the following quantitative forecasts for {flow_direction_desc} "
-            f"of {commodity} (HS4: {hs4}) [Trade Flow Direction: {trade_type}]:\n"
-            f"- Model A Trade Return 1M: {ml_predictions['trade']['Trade_Return_1M_Pred']:+.2f}%\n"
-            f"- Model B National Production Growth: {ml_predictions['agriculture']['Production_Growth_Pred']:+.2f}%, Risk: {ml_predictions['agriculture']['Production_Risk']}\n"
-            f"- Model C Price Return 1M: {ml_predictions['price']['Price_Return_1M_Pred'] if ml_predictions['price']['status'] == 'AVAILABLE' else 'UNAVAILABLE'}\n"
-            f"- Model D Agri GVA Growth: {ml_predictions['economy']['Agri_GVA_Growth_Pred']:+.2f}%, Food Inflation Delta: {ml_predictions['economy']['Inflation_Change_Pred']:+.2f} pp\n\n"
-            f"TRADE DIRECTION CONSISTENCY RULES:\n"
-            f"- Trade Flow is '{trade_type}'.\n"
-            f"- If Trade Flow is Export: Model A negative trade return represents weaker export flows / export contraction to {event_country}; positive return represents export expansion.\n"
-            f"- If Trade Flow is Import: Model A negative trade return represents weaker import flows / import contraction from {event_country}; positive return represents import surge.\n"
-            f"- Strictly respect the '{trade_type}' direction from India's baseline perspective."
-        )
-        economic_interp_text = self.llm.generate_text(
-            prompt=interp_prompt,
-            system_instruction="You are an econometric analyst. Never make causal claims. Use non-causal econometric phrasing (correlates, associates, forecasts). Strictly respect trade flow direction (Export vs Import)."
-        )
-        interp_provider = getattr(self.llm, "last_provider_used", None) or "Groq — openai/gpt-oss-120b"
-
-        # Step 3: Stakeholder Engine & Mitigation Playbooks
-        print("  [*] [3/3] Evaluating stakeholder engine and synthesizing grounded mitigation playbooks...", flush=True)
+        # Stage 1 & 2: Feature verification & structured parameters
+        t_stage1_start = _pytime.perf_counter()
         structured_event = {
             "country": event_country,
             "commodity": commodity,
@@ -168,26 +129,42 @@ class DrishtiAgentOrchestrator:
             "approximate_timing": event_date,
             "summary": scenario_data.get("description", "Geopolitical agricultural trade shock scenario"),
         }
+        stage_timings["stage_1_event_intelligence"] = round(_pytime.perf_counter() - t_stage1_start, 3)
+        stage_statuses["stage_1_event_intelligence"] = "COMPLETED"
+        stage_timings["stage_2_structured_event"] = round(_pytime.perf_counter() - t_stage1_start, 3)
+        stage_statuses["stage_2_structured_event"] = "COMPLETED"
 
-        stakeholder_output = self.stakeholder_agent.process(
-            event_dict=structured_event,
-            ml_predictions=ml_predictions,
-            trade_share=trade_share or 5.0,
-            effective_shock=float((shock_intensity or 1.0) * ((trade_share or 5.0) / 100.0)),
-            month=int(event_date.split("-")[1]) if "-" in event_date else 6,
-            year=int(event_date.split("-")[0]) if "-" in event_date else 2024,
-        )
+        # Stage 3: Execute quantitative ML cascade with canonical feature engineering
+        print("  [*] [1/3] Executing canonical feature engineering and quantitative ML cascade...", flush=True)
+        t_ml_start = _pytime.perf_counter()
+        try:
+            cascade_output = run_drishti_ml_cascade(
+                country=event_country,
+                trade_type=trade_type,
+                hs4=hs4,
+                commodity=commodity,
+                event_date=event_date,
+                shock_intensity=shock_intensity,
+                trade_share=trade_share,
+                goldstein_score=goldstein,
+                avg_tone=avg_tone,
+                num_mentions=mentions,
+                event_root=event_root,
+                event_code=event_code,
+            )
+            stage_timings["stage_3_ml_cascade"] = round(_pytime.perf_counter() - t_ml_start, 3)
+            ml_predictions = cascade_output["predictions"]
+            prov_counts = cascade_output.get("provenance_counts", {})
+            prov_details = cascade_output.get("provenance_details", {})
+            stage_statuses["stage_3_ml_cascade"] = "COMPLETED"
+        except Exception as _ml_err:
+            stage_timings["stage_3_ml_cascade"] = round(_pytime.perf_counter() - t_ml_start, 3)
+            stage_statuses["stage_3_ml_cascade"] = "FAILED"
+            raise RuntimeError(f"Stage 3 ML Cascade failed: {_ml_err}") from _ml_err
 
-        mitigation_output = self.mitigation_agent.process(
-            event_dict=structured_event,
-            ml_predictions=ml_predictions,
-            stakeholder_impacts=stakeholder_output["stakeholder_impacts"],
-        )
-        mitigation_provider = mitigation_output.get("llm_provider") or getattr(self.mitigation_agent.llm, "last_provider_used", None) or "Groq — openai/gpt-oss-120b"
-
-        # Step 4: Decision-support layer (Supply-Chain + Vulnerability)
+        # Stage 4: Decision-support layer — Supply Chain
+        t_sc_start = _pytime.perf_counter()
         supply_chain_output = {}
-        vulnerability_output = {}
         if self.supply_chain_agent is not None:
             try:
                 supply_chain_output = self.supply_chain_agent.analyse(
@@ -200,10 +177,17 @@ class DrishtiAgentOrchestrator:
                     trade_share=float(trade_share or 5.0),
                     ml_predictions=ml_predictions,
                 )
+                stage_statuses["stage_4_supply_chain"] = "COMPLETED"
             except Exception as _sc_err:
                 supply_chain_output = {"error": str(_sc_err)}
+                stage_statuses["stage_4_supply_chain"] = "FAILED"
+        else:
+            stage_statuses["stage_4_supply_chain"] = "SKIPPED"
+        stage_timings["stage_4_supply_chain"] = round(_pytime.perf_counter() - t_sc_start, 3)
 
-
+        # Stage 5: Decision-support layer — Regional Agricultural Vulnerability (RAVS)
+        t_vu_start = _pytime.perf_counter()
+        vulnerability_output = {}
         if self.vulnerability_agent is not None:
             try:
                 vulnerability_output = self.vulnerability_agent.analyse(
@@ -214,8 +198,84 @@ class DrishtiAgentOrchestrator:
                     ml_predictions=ml_predictions,
                     supply_chain_output=supply_chain_output,
                 )
+                stage_statuses["stage_5_vulnerability"] = "COMPLETED"
             except Exception as _vu_err:
                 vulnerability_output = {"error": str(_vu_err)}
+                stage_statuses["stage_5_vulnerability"] = "FAILED"
+        else:
+            stage_statuses["stage_5_vulnerability"] = "SKIPPED"
+        stage_timings["stage_5_vulnerability"] = round(_pytime.perf_counter() - t_vu_start, 3)
+
+        # Stage 6: Stakeholder Engine
+        print("  [*] [2/3] Evaluating stakeholder engine...", flush=True)
+        t_sh_start = _pytime.perf_counter()
+        try:
+            stakeholder_output = self.stakeholder_agent.process(
+                event_dict=structured_event,
+                ml_predictions=ml_predictions,
+                trade_share=trade_share or 5.0,
+                effective_shock=float((shock_intensity or 1.0) * ((trade_share or 5.0) / 100.0)),
+                month=int(event_date.split("-")[1]) if "-" in event_date else 6,
+                year=int(event_date.split("-")[0]) if "-" in event_date else 2024,
+            )
+            stage_statuses["stage_6_stakeholder_impact"] = "COMPLETED"
+        except Exception as _sh_err:
+            stage_statuses["stage_6_stakeholder_impact"] = "FAILED"
+            raise RuntimeError(f"Stage 6 Stakeholder Advisory failed: {_sh_err}") from _sh_err
+        stage_timings["stage_6_stakeholder_impact"] = round(_pytime.perf_counter() - t_sh_start, 3)
+
+        # Stage 7: Economic Interpretation & Mitigation Playbooks
+        print("  [*] [3/3] Generating non-causal econometric interpretation and grounded mitigation playbooks...", flush=True)
+        t_mit_start = _pytime.perf_counter()
+        flow_direction_desc = f"India's exports to {event_country}" if trade_type.lower() == "export" else f"India's imports from {event_country}"
+
+        trade_val = ml_predictions['trade'].get('Trade_Return_1M_Pred')
+        trade_status = ml_predictions['trade'].get('status', 'AVAILABLE')
+        trade_reason = ml_predictions['trade'].get('unavailable_reason', 'Unobserved corridor')
+        trade_str = f"{trade_val:+.2f}%" if (trade_val is not None and trade_status == 'AVAILABLE') else f"UNAVAILABLE ({trade_reason})"
+
+        prod_val = ml_predictions['agriculture'].get('Production_Growth_Pred')
+        prod_str = f"{prod_val:+.2f}%" if prod_val is not None else "UNAVAILABLE"
+        prod_risk_str = ml_predictions['agriculture'].get('Production_Risk', 'Medium')
+
+        price_val = ml_predictions['price'].get('Price_Return_1M_Pred')
+        price_status = ml_predictions['price'].get('status', 'AVAILABLE')
+        price_reason = ml_predictions['price'].get('unavailable_reason', 'Missing upstream OOF lag')
+        price_str = f"{price_val:+.2f}%" if (price_val is not None and price_status == 'AVAILABLE') else f"UNAVAILABLE ({price_reason})"
+
+        gva_val = ml_predictions['economy'].get('Agri_GVA_Growth_Pred')
+        gva_str = f"{gva_val:+.2f}%" if gva_val is not None else "UNAVAILABLE"
+        infl_val = ml_predictions['economy'].get('Inflation_Change_Pred')
+        infl_str = f"{infl_val:+.2f} pp" if infl_val is not None else "UNAVAILABLE"
+
+        interp_prompt = (
+            f"Synthesize the economic implications of the following quantitative forecasts for {flow_direction_desc} "
+            f"of {commodity} (HS4: {hs4}) [Trade Flow Direction: {trade_type}]:\n"
+            f"- Model A Trade Return 1M: {trade_str}\n"
+            f"- Model B National Production Growth: {prod_str}, Risk: {prod_risk_str}\n"
+            f"- Model C Price Return 1M: {price_str}\n"
+            f"- Model D Agri GVA Growth: {gva_str}, Food Inflation Delta: {infl_str}\n\n"
+            f"TRADE DIRECTION & AVAILABILITY RULES:\n"
+            f"- Trade Flow is '{trade_type}'.\n"
+            f"- If Trade Flow is Export: Model A negative trade return represents weaker export flows / export contraction to {event_country}; positive return represents export expansion.\n"
+            f"- If Trade Flow is Import: Model A negative trade return represents weaker import flows / import contraction from {event_country}; positive return represents import surge.\n"
+            f"- If any model is UNAVAILABLE, explicitly state that the prediction is unavailable due to data constraints (e.g. unobserved bilateral corridor or missing upstream lags) and do NOT fabricate or invent a numeric prediction.\n"
+            f"- Strictly respect the '{trade_type}' direction from India's baseline perspective."
+        )
+        economic_interp_text = self.llm.generate_text(
+            prompt=interp_prompt,
+            system_instruction="You are an econometric analyst. Never make causal claims. Use non-causal econometric phrasing (correlates, associates, forecasts). Strictly respect trade flow direction (Export vs Import). Never fabricate missing model predictions."
+        )
+        interp_provider = getattr(self.llm, "last_provider_used", None) or "Groq — openai/gpt-oss-120b"
+
+        mitigation_output = self.mitigation_agent.process(
+            event_dict=structured_event,
+            ml_predictions=ml_predictions,
+            stakeholder_impacts=stakeholder_output["stakeholder_impacts"],
+        )
+        mitigation_provider = mitigation_output.get("llm_provider") or getattr(self.mitigation_agent.llm, "last_provider_used", None) or "Groq — openai/gpt-oss-120b"
+        stage_statuses["stage_7_mitigation"] = "COMPLETED"
+        stage_timings["stage_7_mitigation"] = round(_pytime.perf_counter() - t_mit_start, 3)
 
         final_result = {
             "scenario_name": scenario_name,
@@ -229,6 +289,8 @@ class DrishtiAgentOrchestrator:
             "mitigation_actions": mitigation_output["mitigation_actions"],
             "supply_chain_analysis": supply_chain_output,
             "vulnerability_analysis": vulnerability_output,
+            "stage_timings": stage_timings,
+            "stage_statuses": stage_statuses,
             "llm_usage": {
                 "economic_interpretation": interp_provider,
                 "mitigation": mitigation_provider,

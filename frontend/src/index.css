@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-darkest: #070a12;
+    --bg-base: #0b111e;
+    --bg-card: #0f172a;
+    --border-color: #1e293b;
+  }
+
+  body {
+    @apply bg-[#070a12] text-slate-200 antialiased font-sans m-0 p-0 selection:bg-cyan-500/30 selection:text-cyan-200;
+    overflow-x: hidden;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin: 0;
+    max-width: 100%;
+    border: none;
+    text-align: left;
+  }
+}
+
+/* Custom intelligence dashboard scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #070a12;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Radar ping animation */
+@keyframes radar-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-radar {
+  animation: radar-sweep 4s linear infinite;
+}
+
+/* Subtle glow utility classes */
+.card-terminal {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(11, 17, 30, 0.95) 100%);
+  border: 1px solid rgba(30, 41, 59, 0.8);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+}
+
+.card-terminal-hover {
+  transition: all 0.2s ease-in-out;
+}
+.card-terminal-hover:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 4px 25px -2px rgba(14, 165, 233, 0.15);
+}

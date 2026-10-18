@@ -1,0 +1,108 @@
+{
+  "manifest_version": "1.0.0",
+  "phase": "6.7",
+  "generated_at": "2026-10-16T12:39:25.228743",
+  "git_commit": "d3342380fa75209320c4f6ad06fc35c038e4ed63",
+  "git_branch": "ml-model-improvement-v2",
+  "backup_directory": "archive/legacy_models_backup_phase_6_7/models_pre_cleanup",
+  "backup_manifest": "archive/legacy_models_backup_phase_6_7/backup_manifest.json",
+  "deletion_manifest": "experiments/phase_6_7_model_preservation/deletion_manifest.csv",
+  "protected_models_count": 5,
+  "active_models_count": 6,
+  "protected_models": {
+    "experiments/mandatory_ml_performance_optimization/models/model_a_log_value_1m_lgb.joblib": {
+      "sha256": "5a1021e2f24d15fbd0d9e314cae2cf5cabbc66398cbdc76b27cfa3394ece8f91",
+      "size_bytes": 1635104,
+      "verified": true,
+      "freeze_status": "STRICTLY_FROZEN"
+    },
+    "experiments/mandatory_ml_performance_optimization/models/model_a_log_value_3m_lgb.joblib": {
+      "sha256": "b6d37bf58915beb3afff9467cc14e4dd82f4d20004ebb9383fe78102bfe6e883",
+      "size_bytes": 1651661,
+      "verified": true,
+      "freeze_status": "STRICTLY_FROZEN"
+    },
+    "experiments/mandatory_ml_performance_optimization/models/model_c_log_price_1m_lgb.joblib": {
+      "sha256": "74880c2b2ece5965e582a7c5bb5f7984f749fa62bf28f673da0fbfd955854fac",
+      "size_bytes": 1671160,
+      "verified": true,
+      "freeze_status": "STRICTLY_FROZEN"
+    },
+    "experiments/mandatory_ml_performance_optimization/models/model_c_log_price_3m_lgb.joblib": {
+      "sha256": "555bb7f35936af5ecd6b1c1662294038ffd4ab42959fcf4b2085ff4938fb361c",
+      "size_bytes": 1690256,
+      "verified": true,
+      "freeze_status": "STRICTLY_FROZEN"
+    },
+    "experiments/mandatory_ml_performance_optimization/models/model_b1_national_yield_lgb.joblib": {
+      "sha256": "a2ca8a2b1a2d2a3f7c3ee5c715195a87d20fab9984028884dee4916d955fade2",
+      "size_bytes": 468393,
+      "verified": true,
+      "freeze_status": "STRICTLY_FROZEN"
+    }
+  },
+  "active_production_models": {
+    "models/model_a_trade.joblib": {
+      "sha256": "fc3707152216ef9211f436bb8c28b5da2c4b1406a62dc67f2ee45a6e01bc673a",
+      "size_bytes": 3052218,
+      "verified": true,
+      "status": "ACTIVE_PRODUCTION"
+    },
+    "models/model_b_production_risk.joblib": {
+      "sha256": "7841afaee52d7b4d81beccab09c7e2853e620b9986bae31223f069f457531786",
+      "size_bytes": 4015972,
+      "verified": true,
+      "status": "ACTIVE_PRODUCTION"
+    },
+    "models/model_b_production_yoy.joblib": {
+      "sha256": "7650e2567a3eca5b67681c73e989346966e5559075fadbc970b931498c6f1e81",
+      "size_bytes": 523046,
+      "verified": true,
+      "status": "ACTIVE_PRODUCTION"
+    },
+    "models/model_c_price.joblib": {
+      "sha256": "a680045897ff365c8372ce3a39ecc3ae45b7f31c37d21ec15061190488c89616",
+      "size_bytes": 2048253,
+      "verified": true,
+      "status": "ACTIVE_PRODUCTION"
+    },
+    "models/model_d_agri_gva.joblib": {
+      "sha256": "6ac5dba8ca92d28634c4e477532259e9f97894efda60dd3ef0d3fab26e89b85b",
+      "size_bytes": 82603,
+      "verified": true,
+      "status": "ACTIVE_PRODUCTION"
+    },
+    "models/model_d_inflation.joblib": {
+      "sha256": "91f5bda21a659b177add0653a3d6345deb6b21facf292ff584a33223e8130a67",
+      "size_bytes": 561302,
+      "verified": true,
+      "status": "ACTIVE_PRODUCTION"
+    }
+  },
+  "supporting_interfaces": {
+    "experiments/phase_6_4_weather_cascade_validation/adapters/cascade_adapters.py": {
+      "sha256": "c916e7de3f6c973916f439f0ee4163f36fbdbde2392d57e7aad25ae37f32319e",
+      "size_bytes": 18709,
+      "verified": true,
+      "status": "VERIFIED_SUPPORTING_INTERFACE"
+    },
+    "drishti_mcp/tools/ml_cascade_tool.py": {
+      "sha256": "cc83dd69ccb3c26c5fc1bc0c19e74daf64bc375af1ce71e2f33142a4b897eb76",
+      "size_bytes": 11695,
+      "verified": true,
+      "status": "VERIFIED_SUPPORTING_INTERFACE"
+    },
+    "scripts/cascade_orchestrator.py": {
+      "sha256": "999979a132cae33b9042fa76944658c48f93255d0d5fdf2ba0b65691c6ffb224",
+      "size_bytes": 28157,
+      "verified": true,
+      "status": "VERIFIED_SUPPORTING_INTERFACE"
+    },
+    "scripts/event_store.py": {
+      "sha256": "eea5a6b72a0a493869ee46de9119d5838ce20eb31018180c88e4fad1dc8aae79",
+      "size_bytes": 29384,
+      "verified": true,
+      "status": "VERIFIED_SUPPORTING_INTERFACE"
+    }
+  }
+}

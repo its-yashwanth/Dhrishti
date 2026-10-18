@@ -57,20 +57,24 @@ def tool_run_drishti_ml_cascade(
     country: str,
     trade_type: str,
     hs4: int,
+    commodity: str = "Commodity",
     year: int = 2024,
     month: int = 1,
     shock_intensity: float = 1.0,
     trade_share: float = 5.0,
+    **kwargs: Any,
 ) -> Dict[str, Any]:
     """Execute Drishti ML cascade across Models A, B, C, and D."""
     return run_drishti_ml_cascade(
         country=country,
         trade_type=trade_type,
         hs4=hs4,
+        commodity=commodity,
         year=year,
         month=month,
         shock_intensity=shock_intensity,
         trade_share=trade_share,
+        **kwargs,
     )
 
 

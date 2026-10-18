@@ -1,0 +1,528 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { EventInputHero } from '../components/event/EventInputHero';
+import { ScenarioReviewModal } from '../components/event/ScenarioReviewModal';
+import { ProcessingPipeline } from '../components/event/ProcessingPipeline';
+import { KpiCard } from '../components/common/KpiCard';
+import { Badge } from '../components/common/Badge';
+import { ProvenanceTag } from '../components/common/ProvenanceTag';
+import { DrishtiAPI, PipelineStageEvent } from '../services/api';
+import { DrishtiAnalysisResult, StructuredEvent, TradeFlow, TradeShareStatus } from '../types/drishti';
+import {
+  Sparkles,
+  ArrowRight,
+  TrendingDown,
+  Globe2,
+  MapPin,
+  Users,
+  ShieldCheck,
+  FileText,
+  AlertTriangle,
+  Info,
+  GitCommitHorizontal,
+  Sliders,
+  Database
+} from 'lucide-react';
+
+interface OutletContextType {
+  currentScenario: DrishtiAnalysisResult;
+  refreshScenario: () => void;
+}
+
+export const DashboardPage: React.FC = () => {
+  const { currentScenario, refreshScenario } = useOutletContext<OutletContextType>();
+  const navigate = useNavigate();
+
+  const [extractedEvent, setExtractedEvent] = useState<StructuredEvent | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [currentStage, setCurrentStage] = useState<PipelineStageEvent['stage']>();
+  const [stagesStatus, setStagesStatus] = useState<Record<string, 'pending' | 'active' | 'completed' | 'error'>>({});
+  const [stagesDetail, setStagesDetail] = useState<Record<string, string>>({});
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [executionError, setExecutionError] = useState<string | null>(null);
+  const [failedStage, setFailedStage] = useState<string | null>(null);
+  const [lastParams, setLastParams] = useState<any | null>(null);
+
+  // Live timer while pipeline executes
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (isExecuting) {
+      interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isExecuting]);
+
+  // Step 1: Trigger natural language extraction via Event Intelligence
+  const handleAnalyzeQuery = async (query: string) => {
+    setIsExtracting(true);
+    try {
+      const extracted = await DrishtiAPI.extractEvent(query);
+      setExtractedEvent(extracted);
+    } catch {
+      // Graceful fallback
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  // Step 2: Execute full econometric cascade after review
+  const handleConfirmScenario = async (params: {
+    commodity: string;
+    partner_country: string;
+    trade_type: TradeFlow;
+    shock_intensity: number;
+    shock_intensity_source: string;
+    trade_share: number;
+    trade_share_source: string;
+    trade_share_status: TradeShareStatus;
+    scenario_multiplier: number;
+    hs4: number;
+  }) => {
+    setLastParams(params);
+    setExtractedEvent(null);
+    setIsExecuting(true);
+    setExecutionError(null);
+    setFailedStage(null);
+    setElapsedSeconds(0);
+    setStagesStatus({});
+    setStagesDetail({});
+
+    try {
+      await DrishtiAPI.runFullAnalysis(
+        {
+          query: extractedEvent?.summary || `Geopolitical trade shock involving ${params.commodity} to ${params.partner_country}`,
+          ...params
+        },
+        (progress) => {
+          setCurrentStage(progress.stage);
+          setStagesStatus(prev => ({
+            ...prev,
+            [progress.stage]: progress.status
+          }));
+          setStagesDetail(prev => ({
+            ...prev,
+            [progress.stage]: progress.detail || ''
+          }));
+          if (progress.status === 'error') {
+            setFailedStage(progress.stage);
+            setExecutionError(progress.detail || 'Execution error in stage');
+          }
+        }
+      );
+      refreshScenario();
+    } catch (err: any) {
+      const msg = err?.message || 'Orchestrator pipeline execution failed or timed out.';
+      setExecutionError(msg);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  const handleRetry = () => {
+    if (lastParams) {
+      handleConfirmScenario(lastParams);
+    }
+  };
+
+  // Open parameter adjustment for active scenario directly on Dashboard
+  const handleAdjustActiveParameters = () => {
+    if (currentScenario?.scenario_data) {
+      const sd = currentScenario.scenario_data;
+      setExtractedEvent({
+        country: sd.event_country,
+        commodity: sd.commodity,
+        hs4: sd.hs4,
+        trade_type: sd.trade_type,
+        event_type: sd.event_type,
+        shock_direction: sd.shock_direction,
+        approximate_timing: 'Active Context',
+        summary: sd.description || `Active scenario: ${sd.commodity} ${sd.trade_type} to ${sd.event_country}`,
+        confidence: sd.confidence,
+        shock_intensity: sd.shock_intensity,
+        shock_intensity_source: sd.shock_intensity_source || 'GDELT DOC 2.0 / MCP News Event Evidence',
+        trade_share: sd.trade_share,
+        trade_share_source: sd.trade_share_source || 'Historical Trade Database (UN Comtrade / DGFT)',
+        trade_share_status: sd.trade_share_status || 'CONFIRMED_HISTORICAL',
+        scenario_multiplier: sd.scenario_multiplier || 1.0,
+        effective_shock: sd.effective_shock || 0.075,
+        effective_shock_formula: sd.effective_shock_formula
+      });
+    }
+  };
+
+  const scData = currentScenario?.supply_chain_analysis?.supply_chain_analysis;
+  const vuData = currentScenario?.vulnerability_analysis?.vulnerability_analysis;
+  const mlPreds = currentScenario?.ml_predictions;
+  const sData = currentScenario?.scenario_data;
+
+  return (
+    <div className="space-y-6">
+      {/* 1. Large Natural Language Input Hero */}
+      <EventInputHero onAnalyze={handleAnalyzeQuery} isLoading={isExtracting} />
+
+      {/* 2. Detected Event Review Confirmation Panel (Two-Step Ingestion) */}
+      {extractedEvent && (
+        <ScenarioReviewModal
+          event={extractedEvent}
+          onConfirm={handleConfirmScenario}
+          onCancel={() => setExtractedEvent(null)}
+        />
+      )}
+
+      {/* 3. Real-time Pipeline Execution Bar */}
+      {(isExecuting || Object.keys(stagesStatus).length > 0 || executionError) && (
+        <ProcessingPipeline
+          currentStage={currentStage}
+          stagesStatus={stagesStatus}
+          stagesDetail={stagesDetail}
+          isExecuting={isExecuting}
+          elapsedSeconds={elapsedSeconds}
+          errorMessage={executionError}
+          failedStage={failedStage}
+          onRetry={lastParams ? handleRetry : undefined}
+        />
+      )}
+
+      {/* 4. Active Scenario Executive Banner */}
+      <div className="card-terminal rounded-xl p-5 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-[#0b1324] via-[#070b14] to-[#070b14]">
+        <div>
+          <div className="flex items-center space-x-2 text-xs font-mono text-cyan-400 mb-1">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span>ACTIVE DECISION CONTEXT</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-300 font-bold">HS4: {sData?.hs4 || 1001}</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-400">{sData?.event_country || 'RUSSIA'}</span>
+            <span className="text-slate-600">|</span>
+            <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+              sData?.trade_share_status === 'CONFIRMED_HISTORICAL'
+                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                : 'bg-amber-950 text-amber-300 border border-amber-800'
+            }`}>
+              {sData?.trade_share_status === 'CONFIRMED_HISTORICAL' ? 'HISTORICAL BASELINE' : 'SCENARIO ASSUMPTION'}
+            </span>
+          </div>
+
+          <h2 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
+            <span>{currentScenario?.scenario_name || 'Wheat Export Disruption (India → Russia)'}</span>
+            <Badge
+              label={sData?.trade_type || 'Export'}
+              variant="PURPLE"
+              size="sm"
+            />
+          </h2>
+
+          <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
+            {sData?.description ||
+              'Bilateral export restriction on Indian wheat with shock intensity across trade share baseline.'}
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] font-mono text-slate-400">
+            <span>Effective Shock: <strong className="text-cyan-300">{sData?.effective_shock?.toFixed(4) || '0.0750'}</strong></span>
+            <span className="text-slate-600">•</span>
+            <span>GDELT Intensity: <strong className="text-purple-300">{sData?.shock_intensity?.toFixed(2) || '1.50'}x</strong></span>
+            <span className="text-slate-600">•</span>
+            <span>Trade Share: <strong className="text-slate-200">{sData?.trade_share?.toFixed(1) || '5.0'}%</strong></span>
+            <span className="text-slate-600">•</span>
+            <span>Multiplier: <strong className="text-sky-300">{sData?.scenario_multiplier?.toFixed(1) || '1.0'}x</strong></span>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-3 shrink-0">
+          <button
+            onClick={handleAdjustActiveParameters}
+            className="px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500 text-xs font-mono text-slate-200 hover:text-cyan-300 transition-colors flex items-center space-x-1.5 cursor-pointer"
+          >
+            <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Adjust Parameters</span>
+          </button>
+          <button
+            onClick={() => navigate('/report')}
+            className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-mono text-xs font-semibold shadow-glow-cyan flex items-center space-x-1.5 transition-all cursor-pointer"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>View Full Report</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 5. Summary KPI Cards (6 Critical Intelligence Vectors) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        {/* Trade Impact (Model A) */}
+        <KpiCard
+          title="Trade Flow Return"
+          value={mlPreds?.trade?.Trade_Return_1M_Pred !== null && mlPreds?.trade?.Trade_Return_1M_Pred !== undefined
+            ? `${mlPreds.trade.Trade_Return_1M_Pred > 0 ? '+' : ''}${mlPreds.trade.Trade_Return_1M_Pred.toFixed(2)}%`
+            : (mlPreds?.trade?.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'N/A')}
+          direction={mlPreds?.trade?.Trade_Return_1M_Pred !== null && mlPreds?.trade?.Trade_Return_1M_Pred !== undefined
+            ? (mlPreds.trade.Trade_Return_1M_Pred < 0 ? 'down' : 'up')
+            : 'neutral'}
+          severity={mlPreds?.trade?.Trade_Return_1M_Pred !== null && mlPreds?.trade?.Trade_Return_1M_Pred !== undefined
+            ? (mlPreds.trade.Trade_Return_1M_Pred < -0.5 ? 'HIGH' : 'MODERATE')
+            : 'LOW'}
+          modelBadge="Model A"
+          subtitle={mlPreds?.trade?.Trade_Return_1M_Pred !== null && mlPreds?.trade?.Trade_Return_1M_Pred !== undefined
+            ? (mlPreds?.trade?.prediction_status === 'FALLBACK_ESTIMATE'
+                ? (mlPreds?.trade?.unavailable_reason || "Direct exposure fallback")
+                : mlPreds?.trade?.prediction_status === 'PROXY_ESTIMATE'
+                  ? (mlPreds?.trade?.unavailable_reason || "Non-agri sectoral proxy")
+                  : "1-Month Trade Return Pred")
+            : (mlPreds?.trade?.unavailable_reason || "Unobserved corridor")}
+          provenance={
+            mlPreds?.trade?.prediction_status === 'MODEL_PREDICTION' ? `[ML: ${mlPreds?.trade?.prediction_method || 'CHAMPION'}]` :
+            mlPreds?.trade?.prediction_status === 'FALLBACK_ESTIMATE' ? `[FALLBACK: ${mlPreds?.trade?.prediction_method || 'BASELINE'}]` :
+            mlPreds?.trade?.prediction_status === 'PROXY_ESTIMATE' ? `[PROXY: ${mlPreds?.trade?.prediction_method || 'SECTORAL'}]` :
+            (mlPreds?.trade?.status === 'UNAVAILABLE' ? '[UNOBSERVED CORRIDOR]' : '[ML INFERENCE]')
+          }
+          accentColor="purple"
+        />
+
+        {/* Agricultural Production (Model B) */}
+        <KpiCard
+          title="National Production"
+          value={mlPreds?.agriculture?.Production_Growth_Pred !== undefined ? `${mlPreds.agriculture.Production_Growth_Pred > 0 ? '+' : ''}${mlPreds.agriculture.Production_Growth_Pred.toFixed(2)}%` : 'N/A'}
+          direction={mlPreds?.agriculture?.Production_Growth_Pred !== undefined && mlPreds.agriculture.Production_Growth_Pred < 0 ? 'down' : 'up'}
+          severity={mlPreds?.agriculture?.Production_Risk === 'High' ? 'HIGH' : mlPreds?.agriculture?.Production_Risk === 'Medium' ? 'MODERATE' : 'LOW'}
+          modelBadge="Model B"
+          subtitle={`Prod Deflection | Risk: ${mlPreds?.agriculture?.Production_Risk || 'Low'}`}
+          provenance={
+            mlPreds?.agriculture?.prediction_status === 'PROXY_ESTIMATE' ? `[PROXY: ${mlPreds?.agriculture?.prediction_method || 'SECTORAL'}]` :
+            mlPreds?.agriculture?.prediction_status === 'FALLBACK_ESTIMATE' ? `[FALLBACK: ${mlPreds?.agriculture?.prediction_method || 'BASELINE'}]` :
+            '[ML INFERENCE]'
+          }
+          accentColor="purple"
+        />
+
+        {/* Price Impact (Model C) */}
+        <KpiCard
+          title="Wholesale Price"
+          value={mlPreds?.price?.Price_Return_1M_Pred !== null && mlPreds?.price?.Price_Return_1M_Pred !== undefined
+            ? `${mlPreds.price.Price_Return_1M_Pred > 0 ? '+' : ''}${mlPreds.price.Price_Return_1M_Pred.toFixed(2)}%`
+            : (mlPreds?.price?.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'N/A')}
+          direction={mlPreds?.price?.Price_Return_1M_Pred !== null && mlPreds?.price?.Price_Return_1M_Pred !== undefined
+            ? (mlPreds.price.Price_Return_1M_Pred > 0 ? 'up' : 'down')
+            : 'neutral'}
+          severity={mlPreds?.price?.Price_Return_1M_Pred !== null && mlPreds?.price?.Price_Return_1M_Pred !== undefined
+            ? (mlPreds.price.Price_Return_1M_Pred > 1.0 ? 'HIGH' : 'MODERATE')
+            : 'LOW'}
+          modelBadge="Model C"
+          subtitle={mlPreds?.price?.Price_Return_1M_Pred !== null && mlPreds?.price?.Price_Return_1M_Pred !== undefined
+            ? (mlPreds?.price?.prediction_status === 'FALLBACK_ESTIMATE'
+                ? (mlPreds?.price?.unavailable_reason || "Domestic price persistence")
+                : mlPreds?.price?.prediction_status === 'PROXY_ESTIMATE'
+                  ? (mlPreds?.price?.unavailable_reason || "Sectoral cost pass-through")
+                  : "Wholesale Price Deflection")
+            : (mlPreds?.price?.unavailable_reason || 'Missing upstream OOF lag')}
+          provenance={
+            mlPreds?.price?.prediction_status === 'MODEL_PREDICTION' ? `[ML: ${mlPreds?.price?.prediction_method || 'CHAMPION'}]` :
+            mlPreds?.price?.prediction_status === 'FALLBACK_ESTIMATE' ? `[FALLBACK: ${mlPreds?.price?.prediction_method || 'BASELINE'}]` :
+            mlPreds?.price?.prediction_status === 'PROXY_ESTIMATE' ? `[PROXY: ${mlPreds?.price?.prediction_method || 'SECTORAL'}]` :
+            (mlPreds?.price?.status === 'UNAVAILABLE' ? '[UNAVAILABLE]' : '[ML INFERENCE]')
+          }
+          accentColor="purple"
+        />
+
+        {/* Economic GVA (Model D) */}
+        <KpiCard
+          title="Agri GVA Growth"
+          value={mlPreds?.economy?.Agri_GVA_Growth_Pred !== undefined ? `${mlPreds.economy.Agri_GVA_Growth_Pred > 0 ? '+' : ''}${mlPreds.economy.Agri_GVA_Growth_Pred.toFixed(2)}%` : 'N/A'}
+          direction={mlPreds?.economy?.Agri_GVA_Growth_Pred && mlPreds.economy.Agri_GVA_Growth_Pred < 0 ? 'down' : 'neutral'}
+          severity="LOW"
+          modelBadge="Model D"
+          subtitle={`Inflation: ${mlPreds?.economy?.Inflation_Change_Pred !== undefined ? `${mlPreds.economy.Inflation_Change_Pred > 0 ? '+' : ''}${mlPreds.economy.Inflation_Change_Pred.toFixed(2)} pp` : 'N/A'}`}
+          provenance={
+            mlPreds?.economy?.prediction_status === 'PROXY_ESTIMATE' ? `[PROXY: ${mlPreds?.economy?.prediction_method || 'SECTORAL'}]` :
+            mlPreds?.economy?.prediction_status === 'FALLBACK_ESTIMATE' ? `[FALLBACK: ${mlPreds?.economy?.prediction_method || 'BASELINE'}]` :
+            '[ML INFERENCE]'
+          }
+          accentColor="purple"
+        />
+
+        {/* Regional Vulnerability (RAVS) */}
+        <KpiCard
+          title="Peak Vulnerability"
+          value={vuData?.regional_scores_summary?.max_ravs?.toFixed(3) || '0.841'}
+          severity="HIGH"
+          modelBadge="RAVS Index"
+          subtitle={`Mean RAVS: ${vuData?.regional_scores_summary?.mean_ravs?.toFixed(3) || '0.412'} (${vuData?.top_vulnerable_regions?.length || 5} Dists)`}
+          provenance="[AGRICULTURE DATA]"
+          accentColor="amber"
+          footerNote={vuData?.top_vulnerable_regions?.[0] ? `${vuData.top_vulnerable_regions[0].district}, ${vuData.top_vulnerable_regions[0].state}` : 'Top Exposed'}
+        />
+
+        {/* Supply Chain Exposure */}
+        <KpiCard
+          title="Effective Shock"
+          value={sData?.effective_shock?.toFixed(4) || '0.0750'}
+          severity="HIGH"
+          modelBadge="Graph Engine"
+          subtitle={`Critical: ${scData?.critical_ports?.length || 3} Ports Flagged`}
+          provenance="[GRAPH-DERIVED]"
+          accentColor="cyan"
+          footerNote={scData?.critical_ports?.[0]?.port?.split(' ')[0] || 'Kandla'}
+        />
+      </div>
+
+      {/* 6. Non-Causal Econometric Interpretation Panel */}
+      <div className="card-terminal rounded-xl p-5 border border-slate-800">
+        <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-purple-400" />
+            <h3 className="text-xs font-mono uppercase tracking-widest text-slate-300 font-semibold">
+              NON-CAUSAL ECONOMETRIC INTERPRETATION
+            </h3>
+          </div>
+          <ProvenanceTag tag="[LLM SYNTHESIS OF QUANTITATIVE FORECASTS]" size="sm" />
+        </div>
+
+        <p className="text-xs text-slate-200 leading-relaxed font-sans">
+          {currentScenario?.economic_interpretation ||
+            'Econometric forecasts associate the scenario with an immediate export volume contraction, generating localized surplus accumulation in northern primary mandis. Supply chain network exposure highlights gateway port bottlenecks.'}
+        </p>
+
+        <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+          <span className="flex items-center space-x-1.5 text-slate-400 font-mono">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span>Strict non-causal disclaimer: Model forecasts represent statistical associations, not deterministic proof.</span>
+          </span>
+          <span className="font-mono text-purple-400">
+            {currentScenario?.llm_usage?.economic_interpretation || 'Gemini 2.5 Flash / Groq LLAMA-3 70B'}
+          </span>
+        </div>
+      </div>
+
+      {/* 7. Deep-Dive Domain Navigation Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Impact Cascade Card */}
+        <div
+          onClick={() => navigate('/cascade')}
+          className="card-terminal rounded-xl p-5 border border-slate-800 hover:border-purple-500/60 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2.5 rounded-lg bg-purple-950/80 border border-purple-800 text-purple-400 group-hover:scale-105 transition-transform">
+                <GitCommitHorizontal className="w-5 h-5" />
+              </div>
+              <Badge label="M-A → D" variant="PURPLE" size="sm" />
+            </div>
+            <h3 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors">
+              Impact Cascade
+            </h3>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Hierarchical econometric models transfer shock from bilateral trade return to national production, wholesale price, and GDP GVA.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-purple-400 font-mono font-medium">
+            <span>Explore Cascade</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+
+        {/* Supply Chain Card */}
+        <div
+          onClick={() => navigate('/supply-chain')}
+          className="card-terminal rounded-xl p-5 border border-slate-800 hover:border-cyan-500/60 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2.5 rounded-lg bg-cyan-950/80 border border-cyan-800 text-cyan-400 group-hover:scale-105 transition-transform">
+                <Globe2 className="w-5 h-5" />
+              </div>
+              <Badge label="3D GLOBE" variant="CYAN" size="sm" />
+            </div>
+            <h3 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+              Supply Chain & Gateway Ports
+            </h3>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Interactive 3D network globe tracking scenario-exposed connections and modeled alternative handling paths across major Indian ports.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-cyan-400 font-mono font-medium">
+            <span>Explore Port Network</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+
+        {/* Vulnerability Card */}
+        <div
+          onClick={() => navigate('/vulnerability')}
+          className="card-terminal rounded-xl p-5 border border-slate-800 hover:border-amber-500/60 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2.5 rounded-lg bg-amber-950/80 border border-amber-800 text-amber-400 group-hover:scale-105 transition-transform">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <Badge label="RAVS MAP" variant="MODERATE" size="sm" />
+            </div>
+            <h3 className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors">
+              Regional Agricultural Vulnerability
+            </h3>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              District-level spatial index (RAVS) across producing zones capturing production share, yield variability, and crop concentration.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-amber-400 font-mono font-medium">
+            <span>Open India Map</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+
+        {/* Stakeholder Card */}
+        <div
+          onClick={() => navigate('/stakeholders')}
+          className="card-terminal rounded-xl p-5 border border-slate-800 hover:border-purple-500/60 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2.5 rounded-lg bg-purple-950/80 border border-purple-800 text-purple-400 group-hover:scale-105 transition-transform">
+                <Users className="w-5 h-5" />
+              </div>
+              <Badge label="6 GROUPS" variant="PURPLE" size="sm" />
+            </div>
+            <h3 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors">
+              Distributional Stakeholder Impacts
+            </h3>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Deterministic impact disaggregation across Farmers, Exporters, Consumers, Foreign Importers, Regional Clusters, and Government.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-purple-400 font-mono font-medium">
+            <span>View Distribution</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+
+        {/* Mitigation Card */}
+        <div
+          onClick={() => navigate('/mitigation')}
+          className="card-terminal rounded-xl p-5 border border-slate-800 hover:border-emerald-500/60 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-800 text-emerald-400 group-hover:scale-105 transition-transform">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <Badge label="PLAYBOOK" variant="LOW" size="sm" />
+            </div>
+            <h3 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors">
+              Mitigation & Action Playbooks
+            </h3>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Time-horizon intervention playbooks (Immediate, Short-Term, Medium-Term, Long-Term) grounded in historical precedents.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-emerald-400 font-mono font-medium">
+            <span>Inspect Recommendations</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

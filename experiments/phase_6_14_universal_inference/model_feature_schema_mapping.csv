@@ -1,0 +1,83 @@
+Model_ID,Feature_Name,Feature_Index,Source_Formula,Data_Type,Expected_Units,Missing_Value_Policy,Training_Transformation,Inverse_Transformation,Prediction_Horizon
+model_a_log_value_1m_lgb,Log_Value_Lag0,0,ln(1 + Value_USD_t) from Comtrade/DGFT,float64,ln(USD+1),Impute from commodity median or route to fallback,np.log1p,exp(y) - 1,1 Month
+model_a_log_value_1m_lgb,Log_Value_Lag1,1,ln(1 + Value_USD_t-1),float64,ln(USD+1),Impute from Lag0 or fallback,np.log1p,None,1 Month
+model_a_log_value_1m_lgb,Log_Value_Lag2,2,ln(1 + Value_USD_t-2),float64,ln(USD+1),Impute from Lag1 or fallback,np.log1p,None,1 Month
+model_a_log_value_1m_lgb,Log_Value_Lag3,3,ln(1 + Value_USD_t-3),float64,ln(USD+1),Impute from Lag2 or fallback,np.log1p,None,1 Month
+model_a_log_value_1m_lgb,Log_Value_Lag5,4,ln(1 + Value_USD_t-5),float64,ln(USD+1),Impute from Lag3 or fallback,np.log1p,None,1 Month
+model_a_log_value_1m_lgb,Log_Value_Lag11,5,ln(1 + Value_USD_t-11),float64,ln(USD+1),Impute from Lag5 or fallback,np.log1p,None,1 Month
+model_a_log_value_1m_lgb,Past_Return_1M,6,Log_Value_Lag0 - Log_Value_Lag1,float64,log return,Zero if lags missing,Linear difference,None,1 Month
+model_a_log_value_1m_lgb,Log_Value_Roll3_Mean,7,Mean(Log_Value_USD over last 3M),float64,ln(USD+1),Mean of available lags or fallback,Rolling mean,None,1 Month
+model_a_log_value_1m_lgb,Log_Value_Roll6_Mean,8,Mean(Log_Value_USD over last 6M),float64,ln(USD+1),Mean of available lags or fallback,Rolling mean,None,1 Month
+model_a_log_value_1m_lgb,Log_Value_Roll12_Mean,9,Mean(Log_Value_USD over last 12M),float64,ln(USD+1),Mean of available lags or fallback,Rolling mean,None,1 Month
+model_a_log_value_1m_lgb,Month_Sin,10,sin(2 * pi * Month / 12),float64,dimensionless,Deterministic calendar feature,sin,None,1 Month
+model_a_log_value_1m_lgb,Month_Cos,11,cos(2 * pi * Month / 12),float64,dimensionless,Deterministic calendar feature,cos,None,1 Month
+model_a_log_value_1m_lgb,GPR,12,Geopolitical Risk Index (Caldara & Iacoviello),float64,index points,Macro series lookup or 135.0 default,None,None,1 Month
+model_a_log_value_1m_lgb,INR_USD_Rate,13,RBI Reference Exchange Rate,float64,INR per USD,Macro series lookup or 83.2 default,None,None,1 Month
+model_a_log_value_1m_lgb,Shock_Intensity_Lag1,14,Event Goldstein * ln(Mentions + 1) or user shock,float64,intensity scale,Default to 1.0 if unobserved,None,None,1 Month
+model_a_log_value_1m_lgb,Trade_Share_Lag1,15,Corridor Value / Sector Total Country Trade * 100,float64,percentage,Default to 5.0% if unobserved,Percentage,None,1 Month
+model_a_log_value_3m_lgb,Log_Value_Lag0..15,0-15,Identical 16 features as 1M,float64,Various,Same policy as 1M,Same as 1M,exp(y) - 1,3 Months
+model_a_trade_xgb,Lagged_Effective_Shock_1,0,Shock_Intensity_Lag1 * (Trade_Share_Lag1 / 100),float64,effective shock,Derived from event shock and share,Multiplication,Percentage return,1 Month
+model_a_trade_xgb,Lagged_Effective_Shock_2,1,Shock_Intensity_Lag2 * (Trade_Share_Lag2 / 100),float64,effective shock,Derived from event shock and share,Multiplication,None,1 Month
+model_a_trade_xgb,Shock_Intensity_Lag1,2,Event shock intensity,float64,intensity,Default 1.0,None,None,1 Month
+model_a_trade_xgb,Shock_Intensity_Lag2,3,Lagged shock intensity (0.8 * lag1),float64,intensity,Calculated,None,None,1 Month
+model_a_trade_xgb,Trade_Share_Lag1,4,Trade share percentage,float64,percentage,Default 5.0%,None,None,1 Month
+model_a_trade_xgb,Trade_Share_Lag2,5,Trade share lag 2,float64,percentage,Default 5.0%,None,None,1 Month
+model_a_trade_xgb,GPR,6,Geopolitical Risk Index,float64,index,Macro lookup (135.0),None,None,1 Month
+model_a_trade_xgb,INR_USD_Rate,7,INR/USD exchange rate,float64,INR/USD,Macro lookup (83.2),None,None,1 Month
+model_a_trade_xgb,Natural_Disaster_Severity_Index,8,EM-DAT Disaster Severity,float64,index,Default 0.0,None,None,1 Month
+model_b1_national_yield_lgb,Yield_Lag1,0,National yield for HS4 crop t-1,float64,tonnes/ha,Historical panel lookup or crop median,Lag,None,Annual/Season
+model_b1_national_yield_lgb,Yield_Lag2,1,National yield for HS4 crop t-2,float64,tonnes/ha,Historical panel lookup or crop median,Lag,None,Annual/Season
+model_b1_national_yield_lgb,Yield_Lag3,2,National yield for HS4 crop t-3,float64,tonnes/ha,Historical panel lookup or crop median,Lag,None,Annual/Season
+model_b1_national_yield_lgb,Yield_3Y_Med,3,3-Year rolling median national yield,float64,tonnes/ha,Rolling median,Rolling,None,Annual/Season
+model_b1_national_yield_lgb,Yield_3Y_Mean,4,3-Year rolling mean national yield,float64,tonnes/ha,Rolling mean,Rolling,None,Annual/Season
+model_b1_national_yield_lgb,Yield_3Y_Std,5,3-Year rolling std national yield,float64,tonnes/ha,Rolling std,Rolling,None,Annual/Season
+model_b1_national_yield_lgb,Yield_Trend_Slope,6,(Yield_Lag1 - Yield_Lag3) / 2.0,float64,slope,Calculated,Slope,None,Annual/Season
+model_b1_national_yield_lgb,Yield_Short_Trend,7,Yield_Lag1 - Yield_Lag2,float64,diff,Calculated,Diff,None,Annual/Season
+model_b1_national_yield_lgb,Yield_Med_Dev,8,(Yield_Lag1 - Yield_3Y_Med) / Yield_3Y_Med,float64,fraction,Calculated,Fraction,None,Annual/Season
+model_b1_national_yield_lgb,Yield_CV,9,Yield_3Y_Std / Yield_3Y_Mean,float64,fraction,Calculated,Fraction,None,Annual/Season
+model_b1_national_yield_lgb,Ag_Yield_YoY_Lag1,10,National yield YoY growth t-1,float64,percentage,Historical panel lookup,Pct Change,None,Annual/Season
+model_b1_national_yield_lgb,Ag_Yield_YoY_Lag2,11,National yield YoY growth t-2,float64,percentage,Historical panel lookup,Pct Change,None,Annual/Season
+model_b1_national_yield_lgb,Ag_Prod_YoY_Lag1,12,National production YoY growth t-1,float64,percentage,Historical panel lookup,Pct Change,None,Annual/Season
+model_b1_national_yield_lgb,Ag_Area_YoY_Lag1,13,National crop area YoY growth t-1,float64,percentage,Historical panel lookup,Pct Change,None,Annual/Season
+model_b1_national_yield_lgb,Season_Kharif,14,Month in [6,7,8,9,10],int64,binary flag,Deterministic from month,Indicator,None,Annual/Season
+model_b1_national_yield_lgb,Season_Rabi,15,Month in [11,12,1,2,3],int64,binary flag,Deterministic from month,Indicator,None,Annual/Season
+model_b1_national_yield_lgb,Season_Summer,16,Month in [3,4,5],int64,binary flag,Deterministic from month,Indicator,None,Annual/Season
+model_b1_national_yield_lgb,Trade_Share_Lag1,17,Trade share t-1,float64,percentage,Event/corridor share,None,None,Annual/Season
+model_b1_national_yield_lgb,Trade_Share_Lag2,18,Trade share t-2,float64,percentage,Event/corridor share,None,None,Annual/Season
+model_b1_national_yield_lgb,Lagged_Effective_Shock_1,19,Shock * Share / 100 t-1,float64,effective shock,Calculated from event,None,None,Annual/Season
+model_b1_national_yield_lgb,Lagged_Effective_Shock_2,20,Shock * Share / 100 t-2,float64,effective shock,Calculated from event,None,None,Annual/Season
+model_b1_national_yield_lgb,Shock_Intensity_Lag1,21,Shock intensity t-1,float64,intensity,Event shock,None,None,Annual/Season
+model_b1_national_yield_lgb,Shock_Intensity_Lag2,22,Shock intensity t-2,float64,intensity,Event shock,None,None,Annual/Season
+model_b1_national_yield_lgb,GPR,23,Geopolitical risk index,float64,index,Macro series lookup,None,None,Annual/Season
+model_b1_national_yield_lgb,INR_USD_Rate,24,Exchange rate,float64,INR/USD,Macro series lookup,None,None,Annual/Season
+model_b1_national_yield_lgb,Natural_Disaster_Severity_Index,25,EM-DAT severity index,float64,index,Disaster lookup (0.0),None,None,Annual/Season
+model_c_log_price_1m_lgb,Log_Price_Lag0,0,ln(Unit_Price_USD_per_KG_t),float64,ln(USD/kg),Historical commodity price lookup,np.log,exp(y),1 Month
+model_c_log_price_1m_lgb,Log_Price_Lag1,1,ln(Unit_Price_USD_per_KG_t-1),float64,ln(USD/kg),Lagged lookup,np.log,None,1 Month
+model_c_log_price_1m_lgb,Log_Price_Lag2,2,ln(Unit_Price_USD_per_KG_t-2),float64,ln(USD/kg),Lagged lookup,np.log,None,1 Month
+model_c_log_price_1m_lgb,Log_Price_Lag3,3,ln(Unit_Price_USD_per_KG_t-3),float64,ln(USD/kg),Lagged lookup,np.log,None,1 Month
+model_c_log_price_1m_lgb,Log_Price_Lag5,4,ln(Unit_Price_USD_per_KG_t-5),float64,ln(USD/kg),Lagged lookup,np.log,None,1 Month
+model_c_log_price_1m_lgb,Log_Price_Lag11,5,ln(Unit_Price_USD_per_KG_t-11),float64,ln(USD/kg),Lagged lookup,np.log,None,1 Month
+model_c_log_price_1m_lgb,Past_Price_Return_1M,6,Log_Price_Lag0 - Log_Price_Lag1,float64,log return,Calculated difference,Linear difference,None,1 Month
+model_c_log_price_1m_lgb,Log_Price_Roll3_Mean,7,Mean(Log_Price over last 3M),float64,ln(USD/kg),Rolling mean of log price,Rolling,None,1 Month
+model_c_log_price_1m_lgb,Log_Price_Roll6_Mean,8,Mean(Log_Price over last 6M),float64,ln(USD/kg),Rolling mean of log price,Rolling,None,1 Month
+model_c_log_price_1m_lgb,Log_Price_Roll12_Mean,9,Mean(Log_Price over last 12M),float64,ln(USD/kg),Rolling mean of log price,Rolling,None,1 Month
+model_c_log_price_1m_lgb,Month_Sin,10,sin(2 * pi * Month / 12),float64,dimensionless,Deterministic calendar feature,sin,None,1 Month
+model_c_log_price_1m_lgb,Month_Cos,11,cos(2 * pi * Month / 12),float64,dimensionless,Deterministic calendar feature,cos,None,1 Month
+model_c_log_price_1m_lgb,GPR,12,Geopolitical Risk Index,float64,index,Macro series lookup (135.0),None,None,1 Month
+model_c_log_price_1m_lgb,INR_USD_Rate,13,Exchange rate,float64,INR/USD,Macro series lookup (83.2),None,None,1 Month
+model_c_log_price_1m_lgb,Shock_Intensity_Lag1,14,Event shock intensity,float64,intensity,Event shock,None,None,1 Month
+model_c_log_price_3m_lgb,Log_Price_Lag0..14,0-14,Identical 15 features as 1M,float64,Various,Same policy as 1M,Same as 1M,exp(y),3 Months
+model_d_agri_gva,Inflation_Lag1,0,National headline CPI food inflation t-1,float64,percentage,Macro series lookup (5.4%),None,Percentage,1 Quarter
+model_d_agri_gva,Agri_GVA_Lag1,1,Agricultural GVA YoY growth t-1,float64,percentage,Macro series lookup (3.8%),None,Percentage,1 Quarter
+model_d_agri_gva,GDP_Lag1,2,Real GDP growth t-1,float64,percentage,Macro series lookup (6.8%),None,Percentage,1 Quarter
+model_d_agri_gva,Price_Lag1,3,Domestic commodity price index t-1,float64,index,Macro series lookup,None,None,1 Quarter
+model_d_agri_gva,Shock_Intensity_Lag1,4,Shock intensity t-1,float64,intensity,Event shock,None,None,1 Quarter
+model_d_agri_gva,Shock_Intensity_Lag2,5,Shock intensity t-2,float64,intensity,Calculated (0.8 * lag1),None,None,1 Quarter
+model_d_agri_gva,Trade_Share_Lag1,6,Trade share t-1,float64,percentage,Event trade share,None,None,1 Quarter
+model_d_agri_gva,Trade_Share_Lag2,7,Trade share t-2,float64,percentage,Event trade share,None,None,1 Quarter
+model_d_agri_gva,Lagged_Effective_Shock_1,8,Shock * Share / 100 t-1,float64,effective shock,Calculated,None,None,1 Quarter
+model_d_agri_gva,Lagged_Effective_Shock_2,9,Shock * Share / 100 t-2,float64,effective shock,Calculated,None,None,1 Quarter
+model_d_agri_gva,GPR,10,Geopolitical risk index,float64,index,Macro series lookup,None,None,1 Quarter
+model_d_agri_gva,INR_USD_Rate,11,Exchange rate,float64,INR/USD,Macro series lookup,None,None,1 Quarter
+model_d_agri_gva,Price_Return_1M_Pred_Lag1,12,Model C price return prediction,float64,percentage,Cascade output or 0.0 baseline,None,None,1 Quarter
+model_d_inflation,Same 13 features as GVA,0-12,Identical 13 features as Agri GVA,float64,Various,Same policy as GVA,None,Percentage points,1 Quarter
