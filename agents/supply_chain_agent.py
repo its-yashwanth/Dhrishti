@@ -210,6 +210,7 @@ class SupplyChainAgent:
                 "trade_type": trade_type,
                 "trade_direction": trade_direction,
                 "affected_country": event_country,
+                "event_country": event_country,
                 "effective_shock": effective_shock,
                 "exposure_type": exposure_type,
                 "relevant_ports": port_dep.get("relevant_ports", []),
@@ -223,6 +224,7 @@ class SupplyChainAgent:
                     "hs4": hs4,
                     "trade_type": trade_type,
                     "affected_country": event_country,
+                    "event_country": event_country,
                     "shock_direction": shock_direction,
                     "shock_intensity": shock_intensity,
                     "trade_share_pct": trade_share,
@@ -511,9 +513,13 @@ class SupplyChainAgent:
     ) -> Dict[str, Any]:
         return {
             "supply_chain_analysis": {
+                "commodity": commodity,
+                "affected_country": event_country,
+                "event_country": event_country,
                 "scenario": {
                     "commodity": commodity, "hs4": hs4,
                     "trade_type": trade_type, "affected_country": event_country,
+                    "event_country": event_country,
                     "effective_shock": effective_shock,
                 },
                 "error": error,

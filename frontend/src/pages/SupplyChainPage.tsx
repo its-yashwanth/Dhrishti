@@ -27,12 +27,25 @@ interface OutletContextType {
 
 export const SupplyChainPage: React.FC = () => {
   const { currentScenario } = useOutletContext<OutletContextType>();
-  const scData = currentScenario?.supply_chain_analysis?.supply_chain_analysis;
+  const scData =
+    currentScenario?.supply_chain_analysis?.supply_chain_analysis ||
+    (currentScenario?.supply_chain_analysis as any);
 
   const criticalPorts: PortNode[] = useMemo(() => scData?.critical_ports || [], [scData]);
   const scenarioExposure = scData?.scenario_exposure;
-  const eventCountry = scData?.event_country || 'RUSSIA';
-  const commodity = scData?.commodity || 'Wheat';
+  const eventCountry =
+    scData?.event_country ||
+    (scData as any)?.affected_country ||
+    (scData as any)?.scenario?.event_country ||
+    (scData as any)?.scenario?.affected_country ||
+    currentScenario?.scenario_data?.event_country ||
+    (currentScenario?.scenario_data as any)?.country ||
+    'RUSSIA';
+  const commodity =
+    scData?.commodity ||
+    (scData as any)?.scenario?.commodity ||
+    currentScenario?.scenario_data?.commodity ||
+    'Wheat';
 
   // Normalize alternative handling ports from backend contract
   const normalizedAltPorts: NormalizedAlternativePort[] = useMemo(() => {
