@@ -18,17 +18,15 @@ interface NavItem {
   name: string;
   path: string;
   icon: React.ElementType;
-  badge?: string;
-  badgeColor?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Impact Cascade', path: '/cascade', icon: GitCommitHorizontal, badge: 'M-A → D', badgeColor: 'bg-purple-950 text-purple-400 border-purple-800' },
-  { name: 'Supply Chain', path: '/supply-chain', icon: Globe2, badge: '3D Globe', badgeColor: 'bg-sky-950 text-sky-400 border-sky-800' },
-  { name: 'Vulnerability', path: '/vulnerability', icon: MapPin, badge: 'RAVS', badgeColor: 'bg-amber-950 text-amber-400 border-amber-800' },
+  { name: 'Impact Cascade', path: '/cascade', icon: GitCommitHorizontal },
+  { name: 'Supply Chain', path: '/supply-chain', icon: Globe2 },
+  { name: 'Vulnerability', path: '/vulnerability', icon: MapPin },
   { name: 'Stakeholder Impact', path: '/stakeholders', icon: Users },
-  { name: 'Mitigation & Actions', path: '/mitigation', icon: ShieldCheck, badge: 'Playbook', badgeColor: 'bg-emerald-950 text-emerald-400 border-emerald-800' },
+  { name: 'Mitigation & Actions', path: '/mitigation', icon: ShieldCheck },
   { name: 'Evidence & Provenance', path: '/evidence', icon: Database },
   { name: 'Decision Report', path: '/report', icon: FileText },
 ];
@@ -65,11 +63,6 @@ export const Sidebar: React.FC = () => {
                 <Icon className="w-4 h-4 shrink-0 transition-colors group-hover:text-cyan-400" />
                 <span className="tracking-tight">{item.name}</span>
               </div>
-              {item.badge && (
-                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded border font-semibold ${item.badgeColor || 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                  {item.badge}
-                </span>
-              )}
             </NavLink>
           );
         })}
