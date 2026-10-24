@@ -1,14 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { Shield, Activity, Radio, Cpu, RefreshCw } from 'lucide-react';
+import { Shield, Activity, Radio, Cpu, RefreshCw, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { DrishtiAPI } from '../../services/api';
 import { DrishtiAnalysisResult } from '../../types/drishti';
 
 interface HeaderProps {
   currentScenario?: DrishtiAnalysisResult;
   onRefresh?: () => void;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentScenario, onRefresh }) => {
+export const Header: React.FC<HeaderProps> = ({
+  currentScenario,
+  onRefresh,
+  isSidebarOpen = true,
+  onToggleSidebar,
+}) => {
   const [apiHealth, setApiHealth] = useState<{ status: string; latencyMs: number }>({
     status: 'checking',
     latencyMs: 0
@@ -37,8 +44,29 @@ export const Header: React.FC<HeaderProps> = ({ currentScenario, onRefresh }) =>
 
   return (
     <header className="h-16 border-b border-slate-800 bg-[#070a12]/95 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-40">
-      {/* Brand & Subtitle */}
+      {/* Brand & Subtitle + Sidebar Toggle */}
       <div className="flex items-center space-x-4">
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            title={isSidebarOpen ? "Hide sidebar (Ctrl+B)" : "Show sidebar (Ctrl+B)"}
+            className={`
+              p-2 rounded-lg border transition-all duration-200 flex items-center justify-center
+              ${isSidebarOpen
+                ? 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/40 hover:bg-slate-800'
+                : 'bg-cyan-950/70 border-cyan-700/70 text-cyan-300 hover:bg-cyan-900/80 hover:border-cyan-500 shadow-glow-cyan'
+              }
+            `}
+            aria-label="Toggle Navigation Sidebar"
+          >
+            {isSidebarOpen ? (
+              <PanelLeftClose className="w-4 h-4" />
+            ) : (
+              <PanelLeftOpen className="w-4 h-4" />
+            )}
+          </button>
+        )}
+
         <div className="flex items-center space-x-3">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500/20 via-sky-600/30 to-purple-600/20 border border-cyan-500/40 flex items-center justify-center shadow-glow-cyan">
             <Shield className="w-5 h-5 text-cyan-400" />

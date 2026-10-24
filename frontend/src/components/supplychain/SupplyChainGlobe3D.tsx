@@ -430,16 +430,25 @@ export const SupplyChainGlobe3D: React.FC<SupplyChainGlobe3DProps> = ({
       })
       .catch((err) => console.warn('Could not load world boundaries:', err));
 
-    // Resize handler
+    // Resize handler with window event & ResizeObserver for dynamic layout transitions
     const handleResize = () => {
       if (!containerRef.current || !cameraRef.current || !rendererRef.current) return;
       const w = containerRef.current.clientWidth;
       const h = containerRef.current.clientHeight;
+      if (w === 0 || h === 0) return;
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(w, h);
     };
     window.addEventListener('resize', handleResize);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        handleResize();
+      });
+      resizeObserver.observe(containerRef.current);
+    }
 
     // Animation Render Loop
     let particleClock = 0;
@@ -480,6 +489,7 @@ export const SupplyChainGlobe3D: React.FC<SupplyChainGlobe3DProps> = ({
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      if (resizeObserver) resizeObserver.disconnect();
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
       controls.dispose();
       renderer.dispose();
