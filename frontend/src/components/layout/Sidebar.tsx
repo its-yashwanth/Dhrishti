@@ -11,7 +11,6 @@ import {
   Database,
   FileText,
   Network,
-  Info,
   PanelLeftClose,
 } from 'lucide-react';
 
@@ -110,14 +109,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onToggle }) => 
             <div className="text-[10px] text-slate-500">Models A-D & Agent Engine</div>
           </div>
         </NavLink>
-
-        <div className="pt-2 px-3 flex items-center justify-between text-[10px] text-slate-500 font-mono">
-          <span className="flex items-center space-x-1">
-            <Info className="w-3 h-3 text-slate-600" />
-            <span>Drishti Framework</span>
-          </span>
-          <span className="text-slate-600">Phase 1 Capstone</span>
-        </div>
       </div>
     </div>
   </aside>
